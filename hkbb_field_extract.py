@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     if not isinstance(df, pd.DataFrame):
         sys.exit(0)
-    data = df.to_json(orient='records')
+    data = json.loads(df.to_json(orient='records'))
     with open(root + '/' + save_file_name, 'w', encoding='utf-8') as fp:
         json.dump(data, fp)
     print('########## ' + save_file_name + ' is saved ##########')

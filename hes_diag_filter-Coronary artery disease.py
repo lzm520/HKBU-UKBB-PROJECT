@@ -40,6 +40,7 @@ def HES_diagnosis():
         else:
             index = index[0]
 
+        '''在此位置设置想要抽取的疾病ICD9和ICD10'''
         if level == '1':
             flag = False
             diag = {'ukb_index': str(index), 'eid': str(eid), 'ins_index': str(ins_index), 'icd9': '', 'icd10': '',
