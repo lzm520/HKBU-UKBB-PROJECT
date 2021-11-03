@@ -10,7 +10,9 @@ import pandas as pd
 import json
 
 
-def Field_extract(field_id, df):
+def Field_extract(field_id):
+    source_file = '../ukb41910.csv'
+    df = pd.read_csv(source_file, encoding='cp936', nrows=100)
     columns = df.columns
     cols = []
     for col in columns:
@@ -50,8 +52,6 @@ if __name__ == '__main__':
     ''' 字段的提取 '''
     # field_id = input('input the field id wanted to search:')
     # f_saved_name = 'field_' + field_id + '.json'
-    # source_file = '../ukb41910.csv'
-    # df = pd.read_csv(source_file, encoding='cp936', nrows=100)
     # data = Field_extract(field_id, df)
     # with open('../data/field_extraction/' + f_saved_name, 'w', encoding='utf-8') as fp:
     #     json.dump(data, fp)
