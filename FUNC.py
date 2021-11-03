@@ -38,8 +38,9 @@ def Function_one():
                 if re.search(cancer_id, non_cancer):
                     data[idx] = hkb_self_report_non_cancer.loc[idx, 'eid']
                     break
-    df = pd.DataFrame({'ukb_index': list(data.keys()), 'eid': list(data.values())})
-    df.to_csv(path_or_buf='../data/eid_filter/testing.csv', index=False)
+    df = pd.DataFrame({'ukb_index': list(data.keys()), 'eid': list(data.values())}).sort_values('ukb_index')
+    df.index = range(0, len(df))
+    df.to_csv(path_or_buf='../data/eid_filter/eid_filter.csv', index=False)
     pass
 
 

@@ -33,8 +33,7 @@ def HES_diagnosis():
     for line in hesdiag_file:
 
         count += 1
-        if count > 1000:
-            break
+
         if np.mod(count, 50000) == 0:
             print('Iterated entries:', count)
 

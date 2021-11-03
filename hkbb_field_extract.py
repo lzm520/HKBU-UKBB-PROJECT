@@ -12,7 +12,7 @@ import json
 
 def Field_extract(field_id):
     source_file = '../ukb41910.csv'
-    df = pd.read_csv(source_file, encoding='cp936', nrows=100)
+    df = pd.read_csv(source_file, encoding='cp936')
     columns = df.columns
     cols = []
     for col in columns:
