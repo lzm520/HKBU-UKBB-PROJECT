@@ -79,6 +79,8 @@ def Function_one():
         writer = csv.writer(fp)
         writer.writerow(['ukb_index', 'eid'])
         for i in range(df.shape[0]):
+            if np.mod(i, 5000):
+                print('Iterated save patients:', i)
             writer.writerow(df.iloc[i])
 
     if not os.path.exists(field_20001_path):
@@ -86,6 +88,8 @@ def Function_one():
             writer = csv.writer(fp)
             writer.writerow(['eid', '20001'])
             for i in range(ukb_self_report_cancer.shape[0]):
+                if np.mod(i, 5000):
+                    print('Iterated save 20001:', i)
                 writer.writerow(ukb_self_report_cancer.iloc[i])
 
     if not os.path.exists(field_20002_path):
@@ -93,6 +97,8 @@ def Function_one():
             writer = csv.writer(fp)
             writer.writerow(['eid', '20002'])
             for i in range(ukb_self_report_cancer.shape[0]):
+                if np.mod(i, 5000):
+                    print('Iterated save 20002:', i)
                 writer.writerow(ukb_self_report_non_cancer.iloc[i])
 
 
