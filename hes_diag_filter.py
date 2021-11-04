@@ -27,7 +27,7 @@ def HES_diagnosis():
     hes_diag = dict()
 
     hesdiag_file = open('../HES/hesin_diag.txt', 'r')
-    ind_eid = np.load('../data/field_extraction/eids.npy')
+    ind_eid = pd.read_csv('../data/field_extraction/test.csv').to_numpy().reshape([-1])
 
     count = 0
     for line in hesdiag_file:
@@ -72,7 +72,6 @@ def HES_diagnosis():
     data = pd.DataFrame(hes_diag).transpose()
     data.index = range(0, len(data))
     return data
-
 
 
 if __name__ == '__main__':

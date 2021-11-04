@@ -1,4 +1,5 @@
 """ 此pyhon文件集中了所有的功能 """
+import os
 import sys
 
 import numpy as np
@@ -40,7 +41,12 @@ def Function_one():
                     break
     df = pd.DataFrame({'ukb_index': list(data.keys()), 'eid': list(data.values())}).sort_values('ukb_index')
     df.index = range(0, len(df))
-    df.to_csv(path_or_buf='../data/eid_filter/eid_filter.csv', index=False)
+
+    save_path = '../data/eid_filter/eid_filter.csv'
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
+    df.to_csv(path_or_buf=save_path, index=False)
+
     pass
 
 
