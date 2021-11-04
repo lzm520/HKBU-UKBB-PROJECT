@@ -34,8 +34,8 @@ def HES_diagnosis():
 
         count += 1
 
-        if np.mod(count, 50000) == 0:
-            print('Iterated entries:', count)
+        if np.mod(count, 5000) == 0:
+            print('Iterated entries hes_diag_filter:', count)
 
         A = line.strip('\n').split('\t')
         eid = A[0]

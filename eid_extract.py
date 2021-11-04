@@ -12,9 +12,8 @@ def Eid_extract():
             outfile.write('\n')
             if np.mod(i, 1000) == 0:
                 print(i)
-            if i == 10000:
-                break
     outfile.close()
+
 
 if __name__ == '__main__':
     Eid_extract()
