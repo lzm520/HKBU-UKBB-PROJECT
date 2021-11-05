@@ -17,14 +17,16 @@ def Function_one():
     field_20001_path = '../data/field_extraction/field_20001.csv'
     field_20002_path = '../data/field_extraction/field_20002.csv'
     save_path = '../data/eid_filter/eid_filter.csv'
+
     data = {}
-    hes_diag_data = HES_diagnosis()
+    # 默认查询冠心病
+    icd10_list = [r'I20.*', r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
+    icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
+    hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
 
-    self_report_cancer_list = input('请输入想要查询的自报告的癌症疾病id号（逗号,隔开）:')
-    self_report_non_cancer_list = input('请输入想要查询的自报告的非癌症疾病id号（逗号,隔开）:')
-    self_report_cancer_list = self_report_cancer_list.split(',')
-    self_report_non_cancer_list = self_report_non_cancer_list.split(',')
+    self_report_cancer_list = ['1024']
+    self_report_non_cancer_list = ['1356']
 
     if len(self_report_cancer_list) > 1 or self_report_cancer_list[0] != '':
         if os.path.exists(field_20001_path):

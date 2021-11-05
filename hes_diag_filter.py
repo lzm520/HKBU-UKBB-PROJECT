@@ -9,20 +9,8 @@ from collections import defaultdict
 import pandas as pd
 
 
-def HES_diagnosis():
+def HES_diagnosis(icd9_list, icd10_list):
     n_participants = 502506
-    icd10_list = input('请输入想要查询的icd10（正则并以逗号,隔开）:')
-    icd9_list = input('请输入想要查询的icd9（正则并以逗号,隔开）:')
-
-    # 默认查询冠心病
-    if icd10_list == '':
-        icd10_list = ['I20.*', 'I21.*', 'I22.*', 'I23.*', 'I241', 'I252']
-    else:
-        icd10_list = icd10_list.split(',')
-    if icd9_list == '':
-        icd9_list = ['410.*', '4110.*', '412.*', '42979']
-    else:
-        icd9_list = icd9_list.split(',')
 
     hes_diag = dict()
 
@@ -57,14 +45,12 @@ def HES_diagnosis():
         '''在此位置设置想要抽取的疾病ICD9和ICD10'''
         if level == '1':
             for icd10 in icd10_list:
-                reg = eval('icd10')
-                if re.match(reg, ICD10):
+                if re.match(icd10, ICD10):
                     if not hes_diag.get(index):
                         hes_diag[index] = {'ukb_index': index, 'eid': eid}
                         break
             for icd9 in icd9_list:
-                reg = eval('icd10')
-                if re.match(reg, ICD9):
+                if re.match(icd9, ICD9):
                     if not hes_diag.get(index):
                         hes_diag[index] = {'ukb_index': index, 'eid': eid}
                         break
