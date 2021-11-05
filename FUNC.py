@@ -6,8 +6,9 @@ import numpy as np
 import pandas as pd
 import re
 import csv
+from lxml import etree
 from LZM.hes_diag_filter import HES_diagnosis
-from LZM.ukbb_field_extract import Field_extract_for_self_report
+from LZM.ukbb_field_extract import Field_extract_for_self_report, Field_extraction
 
 """ 通过指定的icd9，icd10，self-report获取eid """
 
@@ -104,5 +105,52 @@ def Function_one():
                 writer.writerow(ukb_self_report_non_cancer.iloc[i])
 
 
+""" 将所有字段都分别抽出来 """
+
+
+def Function_two():
+    cols_id = []
+    with open('../data/cols_type.txt', 'r') as fp:
+        for line in fp:
+            row = line.strip().split('\t')
+            cols_id.append(row[1])
+
+    for field_id in cols_id:
+        if id in ['20001', '20002', 'eid']:
+            continue
+        Field_extraction(field_id)
+        break
+
+
+""" 从ukb4190.html文件中将各个字段的字段类型抽取出来 """
+
+
+def Cols_type_extraction():
+    fp = open('../ukb41910.html', 'r')
+    outfile = open('../data/cols_type.txt', 'w')
+    f = fp.read()
+    fp.close()
+
+    html = etree.HTML(f)
+    contents_rows = html.xpath('/html/body/table[2]/tr')[2:]
+    uids = []
+    for i, row in enumerate(contents_rows):
+        if i == 5000:
+            break
+        if np.mod(i, 5000) == 0:
+            print('iterated entries:', i)
+
+        row_content = etree.tostring(row, encoding='utf-8').decode('utf-8')
+        uid = re.search(r'<a.*?>(.*)</a>', row_content).group(1).split('-')[0]
+        if uid in uids:
+            continue
+        uids.append(uid)
+        type = re.search(r'<span.*?>(\w*).*?</span>', row_content).group(1)
+        outfile.write(type + '\t' + uid)
+        outfile.write('\n')
+    outfile.close()
+
+
 if __name__ == '__main__':
-    Function_one()
+    # Function_one()
+    Function_two()

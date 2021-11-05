@@ -3,6 +3,7 @@
 功能二：合并字段形成一个新的数据集
 '''
 import os
+import re
 import sys
 
 import numpy as np
@@ -40,36 +41,41 @@ def Field_extract_for_self_report(field_id):
     return ls
 
 
-def Field_conbine(path):
-    x = os.walk(path)
-    for root, dirs, files in x:
-        root = root  # 当前目录路径
-        files = files  # 当前路径下所有非目录子文件
-        break
-    df = None
-    for i, file_name in enumerate(files):
-        if not str.endswith(file_name, 'json'):
-            continue
-        if i == 1:
-            df = pd.read_json(root + '/' + file_name)
-        else:
-            d = pd.read_json(root + '/' + file_name).iloc[:, 1:]
-            df = pd.concat([df, d], axis=1)
-    return root, df
+def Field_extraction(field_id):
+    n_participants = 502506
+    source_file = '../ukb41910.csv'
+    out_file = '../data/field_extraction/field_' + field_id + '.txt'
+    out_fp = open(out_file, 'w')
+    df = pd.read_csv(source_file, encoding='cp936', nrows=1)
+    columns = df.columns
+    cols = []
+    for col in columns:
+        if re.search('^' + field_id + '-', col):
+            cols.append(col)
+    if len(cols) == 0:
+        return
+
+    n = 4000
+    skip = 0
+    while skip < n_participants:
+        df = pd.read_csv(source_file, encoding='cp936', nrows=n, skiprows=range(1, skip), usecols=cols)
+        print('iterated extraction field_' + field_id + ':', skip)
+        skip += n
+
+        data = df.loc[:, cols[:]]
+
+        for i in range(data.shape[0]):
+            locs = ~data.loc[i, cols[:]].isna()
+            field = df.loc[i, cols[:]][locs]
+            if len(field) == 0:
+                out_fp.write('')
+            else:
+                out_fp.write(str(field[-1]))
+            # field = '&'.join(df.loc[i, cols[:]][locs].to_numpy().astype(np.str))
+            # out_fp.write(field)
+            out_fp.write('\n')
+    out_fp.close()
 
 
 if __name__ == '__main__':
-    Field_extract_for_self_report('20001')
-
-
-    # ''' 将不同的字段合并，首先先将想要合并的json文件放在同一个文件夹中 '''
-    # folder_path = input('please input the absolute path of the folder:')
-    # save_file_name = input('please input the saved file name:')
-    # root, df = Field_conbine(folder_path)
-    #
-    # if not isinstance(df, pd.DataFrame):
-    #     sys.exit(0)
-    # data = json.loads(df.to_json(orient='records'))
-    # with open(root + '/' + save_file_name, 'w', encoding='utf-8') as fp:
-    #     json.dump(data, fp)
-    # print('########## ' + save_file_name + ' is saved ##########')
+    Field_extract_for_self_report('20002')
