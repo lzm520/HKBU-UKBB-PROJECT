@@ -174,17 +174,17 @@ def Clean_field():
             ukb_idx.append(row[0])
     ukb_idx = np.asarray(ukb_idx, dtype=np.int64)
 
-    # fields_id = []
-    # fields_type = []
-    # with open('../data/cols_filter.txt', 'r') as fp:
-    #     for line in fp:
-    #         row = line.strip().split('\t')
-    #         fields_type.append(row[0])
-    #         fields_id.append(row[1])
+    fields_id = []
+    fields_type = []
+    with open('../data/cols_filter.txt', 'r') as fp:
+        for line in fp:
+            row = line.strip().split('\t')
+            fields_type.append(row[0])
+            fields_id.append(row[1])
 
     # testing
-    fields_id = ['19', '46', '48']
-    fields_type = ['Categorical', 'Integer', 'Continuous']
+    # fields_id = ['19', '46', '48']
+    # fields_type = ['Categorical', 'Integer', 'Continuous']
 
     outfile1 = open(outfile1, 'w')
     outfile2 = open(outfile2, 'w')
