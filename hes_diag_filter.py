@@ -62,4 +62,4 @@ def HES_diagnosis(icd9_list, icd10_list):
 
 if __name__ == '__main__':
     # filter diagnosis in HES_diag file 
-    print(HES_diagnosis())
+    pass

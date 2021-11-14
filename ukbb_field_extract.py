@@ -68,7 +68,7 @@ def Field_extraction(field_id):
             locs = ~data.loc[i, cols[:]].isna()
             field = df.loc[i, cols[:]][locs]
             if len(field) == 0:
-                out_fp.write('')
+                out_fp.write('NAN')
             else:
                 out_fp.write(str(field[-1]))
             # field = '&'.join(df.loc[i, cols[:]][locs].to_numpy().astype(np.str))
