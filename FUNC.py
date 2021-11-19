@@ -2,6 +2,8 @@
 import os
 import sys
 
+import tensorflow as tf
+from tensorflow import keras
 import numpy as np
 import pandas as pd
 import re
@@ -10,8 +12,10 @@ from lxml import etree
 from LZM.hes_diag_filter import HES_diagnosis
 from LZM.ukbb_field_extract import Field_extract_for_self_report, Field_extraction
 from sklearn.impute import SimpleImputer
+import statsmodels.api as sm
 
-""" 通过指定的icd9，icd10，self-report获取eid """
+
+# 通过指定的icd9，icd10，self-report获取eid
 def Function_one():
     global ukb_self_report_cancer, ukb_self_report_non_cancer
     field_20001_path = '../data/field_extraction/field_20001.csv'
@@ -104,7 +108,7 @@ def Function_one():
                 writer.writerow(ukb_self_report_non_cancer.iloc[i])
 
 
-""" 将所有字段都分别抽出来 """
+# 将所有字段都分别抽出来
 def Function_two():
     cols_id = []
     with open('../data/cols_type.txt', 'r') as fp:
@@ -119,7 +123,7 @@ def Function_two():
         break
 
 
-""" 从ukb4190.html文件中将各个字段的字段类型抽取出来 """
+# 从ukb4190.html文件中将各个字段的字段类型抽取出来
 def Cols_type_extraction():
     fp = open('../ukb41910.html', 'r')
     outfile = open('../data/cols_type.txt', 'w')
@@ -146,7 +150,7 @@ def Cols_type_extraction():
     outfile.close()
 
 
-""" 从ukb41910文件中将字段类型为Categorical, Integer, Continuous的字段抽出来 """
+# 从ukb41910文件中将字段类型为Categorical, Integer, Continuous的字段抽出来
 def Cols_filter_type():
     outfp = open('../data/cols_filter.txt', 'w')
     with open('../data/cols_type.txt', 'r') as fp:
@@ -160,24 +164,17 @@ def Cols_filter_type():
     pass
 
 
-""" 获取过滤出来的字段内容并从中提取出过滤出来的eid的数据，并对数据进行清洗 """
+# 对各个字段的数据进行清洗
 def Clean_field():
     outfile1 = '../data/clean_data/raw_impute_data.txt'
     outfile2 = '../data/clean_data/raw_impute_type.txt'
-
-    ukb_idx = []
-    with open('../data/eid_filter/eid_filter.csv', 'r') as fp:
-        reader = csv.reader(fp)
-        for i, row in enumerate(reader):
-            if i == 0:
-                continue
-            ukb_idx.append(row[0])
-    ukb_idx = np.asarray(ukb_idx, dtype=np.int64)
 
     fields_id = []
     fields_type = []
     with open('../data/cols_filter.txt', 'r') as fp:
         for line in fp:
+            if line == '\n':
+                continue
             row = line.strip().split('\t')
             fields_type.append(row[0])
             fields_id.append(row[1])
@@ -196,7 +193,7 @@ def Clean_field():
                 if line == '\n':
                     continue
                 data.append(line.strip())
-        data = np.asarray(data)[ukb_idx]
+        data = np.asarray(data)
 
         if fields_type[i] == 'Integer' or fields_type[i] == 'Continuous':
             missing = 0
@@ -218,9 +215,9 @@ def Clean_field():
                 for x in X:
                     outfile1.write(str(x[0]) + ' ')
                 outfile1.write('\n')
-                outfile2.write(fields_type[i] + ' ' + field_id[i])
+                outfile2.write(fields_type[i] + ' ' + fields_id[i])
                 outfile2.write('\n')
-        elif 'Categorical' in fields_type[i]:
+        elif 'Categorical' == fields_type[i]:
             missing = 0
             newdata = []
             for d in data:
@@ -240,11 +237,11 @@ def Clean_field():
                 for x in X:
                     outfile1.write(str(x[0]) + ' ')
                 outfile1.write('\n')
-                outfile2.write(fields_type[i] + ' ' + field_id[i])
+                outfile2.write(fields_type[i] + ' ' + fields_id[i])
                 outfile2.write('\n')
 
 
-""" 将Category类型的数据转变成01类型的数据 """
+# 将Category类型的数据转变成01类型的数据
 def Category_features_transform():
     infile_data = open('../data/clean_data/raw_impute_data.txt', 'r')
     infile_info = open('../data/clean_data/raw_impute_type.txt', 'r')
@@ -298,10 +295,114 @@ def Category_features_transform():
     pass
 
 
+# 通过判断p_value<0.05来筛选特征
+def Features_selection():
+    out_file1 = open('../data/features_selection/features_selection_info.txt', 'w')
+    out_file2 = open('../data/features_selection/features_selection_data.txt', 'w')
+    n_participants = 502506
+    field_id_ukb_idx = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
+    y = np.zeros(n_participants)
+    y[field_id_ukb_idx] = 1
+    fields_info = []
+    with open('../data/clean_data/raw_impute_type.txt') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            fields_info.append(line.strip().split())
+    x = []
+    with open('../data/clean_data/raw_impute_data.txt') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            x.append(d)
+    x = np.asarray(x, dtype=np.float64)
+    features_selection = []
+    for i in range(x.shape[0]):
+        train_x = x[i].reshape((-1, 1))
+        sm_model = sm.Logit(y, sm.add_constant(train_x)).fit(disp=0)
+        p_value = sm_model.pvalues
+        print('field_' + fields_info[i][1] + ': ' + str(p_value))
+        if p_value[1] < 0.05:
+            out_file1.write(' '.join(fields_info[i]) + '\n')
+            out_file2.write(' '.join(x[i].tolist()))
+            out_file2.write('\n')
+    out_file1.close()
+    out_file2.close()
+
+
+# fixed_field_index: 需要把weight固定住的字段的坐标列表
+class MyModel(keras.Model):
+    def __init__(self, fixed_field_index):
+        super(MyModel, self).__init__()
+        self.fixed_field_index = fixed_field_index
+        self.fc1 = keras.layers.Dense(1)
+        self.fc2 = keras.layers.Dense(1)
+        pass
+
+    def call(self, inputs, training=None):
+        if len(self.fixed_field_index) > 0:
+            control_input = tf.gather(inputs, self.fixed_field_index, axis=1)
+        c = np.zeros(inputs.shape[1])
+        c[self.fixed_field_index] = 1
+        c = np.argwhere(c == 0).squeeze()
+        train_input = tf.gather(inputs, c, axis=1)
+        if len(self.fixed_field_index) < 1:
+            out = self.fc1(train_input)
+        else:
+            out1 = self.fc1(train_input)
+            out2 = self.fc2(control_input)
+            out = out1 + out2
+        return out
+
+
+def Function_three():
+    # 此处设置控制变量的坐标号
+    fixed_field_index = []
+    n_participants = 502506
+    epoch = 2
+    lr = 0.001
+    lamda = tf.Variable(tf.constant(0.01))
+    # x
+    x = []
+    with open('../data/clean_data/raw_impute_data.txt') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            x.append(d)
+    x = np.asarray(x, dtype=np.float64).transpose()
+    x = tf.constant(x)
+    # y
+    y = np.zeros(n_participants)
+    eid_filter_index = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
+    y[eid_filter_index] = 1
+    y = tf.constant(y)
+    # x = tf.random.normal(shape=[200, 10])
+    # y = tf.random.normal(shape=[200])
+
+    model = MyModel(fixed_field_index=fixed_field_index)
+    optimizer = tf.optimizers.Adam(learning_rate=lr)
+    for i in range(epoch):
+        with tf.GradientTape() as tape:
+            tape.watch(lamda)
+            out = model(x)
+            loss = tf.losses.binary_crossentropy(y, tf.squeeze(out), from_logits=True) + lamda * tf.norm(
+                model.fc1.trainable_variables[0])
+        grades = tape.gradient(loss, [model.fc1.trainable_variables, [lamda]])
+        optimizer.apply_gradients(zip(grades[0], model.fc1.trainable_variables))
+        optimizer.apply_gradients(zip(grades[1], [lamda]))
+        if np.mod(i, 10) == 0:
+            if i != 0:
+                model.save_weights('../data/model_wights/MyModel_' + str(i) + '.ckpt')
+
+
 if __name__ == '__main__':
     # Function_one()
     # Function_two()
     # Cols_type_extraction()
     # Cols_filter_type()
     # Clean_field()
-    Category_features_transform()
+    # Category_features_transform()
+    # Features_selection()
+    Function_three()

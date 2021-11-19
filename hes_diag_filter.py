@@ -15,7 +15,7 @@ def HES_diagnosis(icd9_list, icd10_list):
     hes_diag = dict()
 
     hesdiag_file = open('../HES/hesin_diag.txt', 'r')
-    ind_eid = pd.read_csv('../data/field_extraction/test.csv').to_numpy().reshape([-1])
+    ind_eid = pd.read_csv('../data/field_extraction/eids.csv').to_numpy().reshape([-1])
 
     count = 0
     for line in hesdiag_file:
@@ -42,7 +42,6 @@ def HES_diagnosis(icd9_list, icd10_list):
         else:
             index = index[0]
 
-        '''在此位置设置想要抽取的疾病ICD9和ICD10'''
         if level == '1':
             for icd10 in icd10_list:
                 if re.match(icd10, ICD10):
