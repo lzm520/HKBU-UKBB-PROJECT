@@ -1,6 +1,5 @@
 '''
 功能一：从ukb41910.csv文件中提取self-report字段
-功能二：合并字段形成一个新的数据集
 '''
 import os
 import re
@@ -9,6 +8,8 @@ import sys
 import numpy as np
 import pandas as pd
 import json
+from collections import defaultdict
+import csv
 
 
 def Field_extract_for_self_report(field_id):
@@ -41,40 +42,49 @@ def Field_extract_for_self_report(field_id):
     return ls
 
 
-def Field_extraction(field_id):
-    n_participants = 502506
+def Field_extraction(cols_id):
     source_file = '../ukb41910.csv'
-    out_file = '../data/field_extraction/field_' + field_id + '.txt'
-    out_fp = open(out_file, 'w')
     df = pd.read_csv(source_file, encoding='cp936', nrows=1)
     columns = df.columns
-    cols = []
-    for col in columns:
-        if re.search('^' + field_id + '-', col):
-            cols.append(col)
-    if len(cols) == 0:
-        return
 
-    n = 4000
-    skip = 0
-    while skip < n_participants:
-        df = pd.read_csv(source_file, encoding='cp936', nrows=n, skiprows=range(1, skip), usecols=cols)
-        print('iterated extraction field_' + field_id + ':', skip)
-        skip += n
+    fields = []
+    all_cols_idx = []
+    for field_id in cols_id[:1]:
+        print('Processing field:', field_id)
+        cols_idx = []
+        for idx, col in enumerate(columns):
+            if re.search('^' + field_id + '-', col):
+                cols_idx.append(idx)
+        if len(cols_idx) == 0:
+            continue
+        all_cols_idx.append(cols_idx)
+        fields.append(field_id)
 
-        data = df.loc[:, cols[:]]
-
-        for i in range(data.shape[0]):
-            locs = ~data.loc[i, cols[:]].isna()
-            field = df.loc[i, cols[:]][locs]
-            if len(field) == 0:
-                out_fp.write('NAN')
+    field_content_dict = defaultdict(list)
+    with open(source_file, 'r', encoding='cp936') as fp:
+        reader = csv.reader(fp)
+        for i, cols in enumerate(reader):
+            if i == 0:
+                continue
+            if np.mod(i, 200) == 0:
+                print('Has extracted people number:', i)
+            if i <= 347200 or i > 347400:
+                continue
             else:
-                out_fp.write(str(field[-1]))
-            # field = '&'.join(df.loc[i, cols[:]][locs].to_numpy().astype(np.str))
-            # out_fp.write(field)
-            out_fp.write('\n')
-    out_fp.close()
+                print("testing:", i)
+            cols = np.asarray(cols)
+            for k, cols_idx in enumerate(all_cols_idx):
+                A = cols[cols_idx]
+                B = 'NAN'
+                for C in A:
+                    if C != '':
+                        B = C
+                field_content_dict[fields[k]].append(B)
+
+    for i, key in enumerate(field_content_dict.keys()):
+        if np.mod(i+1, 200) == 0:
+            print('Has save field number:', i)
+        np.save('../data/field_extraction/fields/field_' + key + '.npy', field_content_dict[key])
 
 
 if __name__ == '__main__':
