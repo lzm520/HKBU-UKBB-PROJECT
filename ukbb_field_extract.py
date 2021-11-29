@@ -68,10 +68,6 @@ def Field_extraction(cols_id):
                 continue
             if np.mod(i, 200) == 0:
                 print('Has extracted people number:', i)
-            if i <= 347200 or i > 347400:
-                continue
-            else:
-                print("testing:", i)
             cols = np.asarray(cols)
             for k, cols_idx in enumerate(all_cols_idx):
                 A = cols[cols_idx]
