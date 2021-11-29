@@ -108,33 +108,6 @@ def Function_one():
                 writer.writerow(ukb_self_report_non_cancer.iloc[i])
 
 
-# 从ukb4190.html文件中将各个字段的字段类型抽取出来
-def Cols_type_extraction():
-    fp = open('../ukb41910.html', 'r')
-    outfile = open('../data/cols_type.txt', 'w')
-    f = fp.read()
-    fp.close()
-
-    html = etree.HTML(f)
-    contents_rows = html.xpath('/html/body/table[2]/tr')[2:]
-    uids = []
-    for i, row in enumerate(contents_rows):
-        if np.mod(i, 5000) == 0:
-            print('iterated entries:', i)
-
-        row_content = etree.tostring(row, encoding='utf-8').decode('utf-8')
-        uid = re.search(r'<a.*?>(.*)</a>', row_content).group(1).split('-')[0]
-        if uid in uids:
-            continue
-        uids.append(uid)
-        type = re.search(r'<span.*?>(\w*).*?</span>', row_content).group(1)
-        type.strip()
-        uid.strip()
-        outfile.write(type + '\t' + uid)
-        outfile.write('\n')
-    outfile.close()
-
-
 # 从ukb41910文件中将字段类型为Categorical, Integer, Continuous的字段抽出来
 def Cols_filter_type():
     outfp = open('../data/cols_filter.txt', 'w')
@@ -160,6 +133,12 @@ def Function_two():
             cols_id.append(row[1])
     cols_id.remove('20001')
     cols_id.remove('20002')
+    A = None
+    for _, _, c in os.walk('../data/field_extraction/fields'):
+        A = c
+    for f in A:
+        cols_id.remove(f[6: -4])
+        print('remove field:', f[6: -4])
     Field_extraction(cols_id)
 
 
@@ -324,7 +303,6 @@ def Features_selection():
     out_file2.close()
 
 
-# fixed_field_index: 需要把weight固定住的字段的坐标列表
 class MyModel(keras.Model):
     def __init__(self, fixed_field_index):
         super(MyModel, self).__init__()
@@ -349,6 +327,8 @@ class MyModel(keras.Model):
         return out
 
 
+# 用单层的全连接层训练并将连接层中的weight提取出来进行特征权重的判断
+# fixed_field_index: 需要把weight固定住的字段的坐标列表
 def Function_three():
     # 此处设置控制变量的坐标号
     fixed_field_index = []
@@ -356,44 +336,47 @@ def Function_three():
     epoch = 2
     lr = 0.001
     lamda = tf.constant(0.01)
-    # # x
-    # x = []
-    # with open('../data/clean_data/raw_impute_data.txt') as fp:
-    #     for line in fp:
-    #         if line == '\n':
-    #             continue
-    #         d = line.strip().split()
-    #         x.append(d)
-    # x = np.asarray(x, dtype=np.float64).transpose()
-    # x = tf.constant(x)
-    # # y
-    # y = np.zeros(n_participants)
-    # eid_filter_index = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
-    # y[eid_filter_index] = 1
-    # y = tf.constant(y)
-    x = tf.random.normal(shape=[200, 10])
-    y = tf.random.normal(shape=[200])
+    batch_sz = 512
+    # x
+    x = []
+    with open('../data/clean_data/raw_impute_data.txt') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            x.append(d)
+    x = np.asarray(x, dtype=np.float64).transpose()
+    x = tf.constant(x)
+    # y
+    y = np.zeros(n_participants)
+    eid_filter_index = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
+    y[eid_filter_index] = 1
+    y = tf.constant(y)
+    db_train = tf.data.Dataset.from_tensor_slices((x, y)).shuffle(y.shape[0]).batch(batch_sz)
+    # x = tf.random.normal(shape=[200, 10])
+    # y = tf.random.normal(shape=[200])
 
     model = MyModel(fixed_field_index=fixed_field_index)
     optimizer = tf.optimizers.Adam(learning_rate=lr)
-    for i in range(epoch):
-        with tf.GradientTape() as tape:
-            out = model(x)
-            loss = tf.losses.binary_crossentropy(y, tf.squeeze(out), from_logits=True)
-            norm = 0
-            for a in range(len(model.trainable_variables)):
-                norm += tf.norm(model.trainable_variables[a], ord=1)
-            loss = loss + lamda * norm
-        grades = tape.gradient(loss, [model.fc1.trainable_variables[0]])
-        optimizer.apply_gradients(zip(grades, [model.fc1.trainable_variables[0]]))
-        if np.mod(i + 1, 10) == 0:
-            model.save_weights('../data/model_wights/MyModel_' + str(i) + '.ckpt')
+    for epo in range(epoch):
+        for step, (train_x, train_y) in enumerate(db_train):
+            with tf.GradientTape() as tape:
+                out = model(train_x)
+                loss = tf.losses.binary_crossentropy(train_y, tf.squeeze(out), from_logits=True)
+                norm = 0
+                for a in range(len(model.trainable_variables)):
+                    norm += tf.norm(model.trainable_variables[a], ord=1)
+                loss = loss + lamda * norm
+            grades = tape.gradient(loss, [model.fc1.trainable_variables[0]])
+            optimizer.apply_gradients(zip(grades, [model.fc1.trainable_variables[0]]))
+            if np.mod(step + 1, 10) == 0:
+                print("epoch:", epo, "step:", step)
+        model.save_weights('../data/model_wights/MyModel_' + str(epo) + '.ckpt')
 
 
 if __name__ == '__main__':
     # Function_one()
     # Function_two()
-    # Cols_type_extraction()
     # Cols_filter_type()
     # Clean_field()
     # Category_features_transform()
