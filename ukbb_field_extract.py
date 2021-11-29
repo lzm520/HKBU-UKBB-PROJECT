@@ -49,7 +49,7 @@ def Field_extraction(cols_id):
 
     fields = []
     all_cols_idx = []
-    for field_id in cols_id[:1]:
+    for field_id in cols_id[:]:
         print('Processing field:', field_id)
         cols_idx = []
         for idx, col in enumerate(columns):
