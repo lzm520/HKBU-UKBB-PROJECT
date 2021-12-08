@@ -80,7 +80,10 @@ def Field_extraction(cols_id):
     for i, key in enumerate(field_content_dict.keys()):
         if np.mod(i+1, 200) == 0:
             print('Has save field number:', i)
-        np.save('../data/field_extraction/fields/field_' + key + '.npy', field_content_dict[key])
+        try:
+            np.save('../data/field_extraction/fields/field_' + key + '.npy', field_content_dict[key])
+        except Exception as e:
+            print(e)
 
 
 if __name__ == '__main__':
