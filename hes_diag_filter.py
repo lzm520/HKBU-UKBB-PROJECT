@@ -10,18 +10,13 @@ import pandas as pd
 
 
 def HES_diagnosis(icd9_list, icd10_list):
-    n_participants = 502506
-
     hes_diag = dict()
-
     hesdiag_file = open('../HES/hesin_diag.txt', 'r')
     ind_eid = pd.read_csv('../data/field_extraction/eids.csv').to_numpy().reshape([-1])
 
     count = 0
     for line in hesdiag_file:
-
         count += 1
-
         if np.mod(count, 5000) == 0:
             print('Iterated entries hes_diag_filter:', count)
 
@@ -36,7 +31,6 @@ def HES_diagnosis(icd9_list, icd10_list):
             index = np.where(ind_eid == np.int32(eid))[0]
         else:
             continue
-
         if len(index) == 0:
             continue
         else:

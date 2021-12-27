@@ -29,8 +29,8 @@ def Function_one():
     hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
 
-    self_report_cancer_list = ['1024']
-    self_report_non_cancer_list = ['1356']
+    self_report_cancer_list = ['1111']
+    self_report_non_cancer_list = ['1074', '1075']
 
     if len(self_report_cancer_list) > 1 or self_report_cancer_list[0] != '':
         if os.path.exists(field_20001_path):
@@ -119,7 +119,6 @@ def Cols_filter_type():
             if row[0] in ['Categorical', 'Integer', 'Continuous']:
                 outfp.write(line)
     outfp.close()
-    pass
 
 
 # 将所有字段都分别抽出来
@@ -142,10 +141,28 @@ def Function_two():
     Field_extraction(cols_id)
 
 
-# 对各个字段的数据进行清洗
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        pass
+
+    try:
+        import unicodedata
+        unicodedata.numeric(s)
+        return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
+# 对numerical类型的特征进行清洗
 def Clean_field():
-    outfile1 = '../data/clean_data/raw_impute_data.txt'
-    outfile2 = '../data/clean_data/raw_impute_type.txt'
+    outfile1 = '../data/clean_data/cleaned_numerical_data.txt'
+    outfile2 = '../data/clean_data/cleaned_numerical_type.txt'
+    outfile3 = '../data/clean_data/cleaned_categorical_data.txt'
+    outfile4 = '../data/clean_data/cleaned_categorical_type.txt'
 
     fields_id = []
     fields_type = []
@@ -157,66 +174,84 @@ def Clean_field():
             fields_type.append(row[0])
             fields_id.append(row[1])
 
-    # testing
-    # fields_id = ['19', '46', '48']
-    # fields_type = ['Categorical', 'Integer', 'Continuous']
-
     outfile1 = open(outfile1, 'w')
     outfile2 = open(outfile2, 'w')
+    outfile3 = open(outfile3, 'w')
+    outfile4 = open(outfile4, 'w')
     for i, field_id in enumerate(fields_id):
-        filed_path = '../data/field_extraction/fields/field_' + field_id + '.npy'
-        data = np.load(filed_path)
+        try:
+            if np.mod(i, 100) == 0:
+                print('Has cleaned field number:', i)
+            filed_path = '../data/field_extraction/fields/field_' + field_id + '.npy'
+            data = np.load(filed_path)
 
-        if fields_type[i] == 'Integer' or fields_type[i] == 'Continuous':
-            missing = 0
-            newdata = []
-            for d in data:
-                if d == 'NAN':
-                    missing += 1
-                    newdata.append(111111)
-                elif float(d) < 0:
-                    missing += 1
-                    newdata.append(111111)
+            if fields_type[i] == 'Integer' or fields_type[i] == 'Continuous':
+                missing = 0
+                newdata = []
+                for d in data:
+                    if d == 'NAN':
+                        missing += 1
+                        newdata.append(111111)
+                    elif float(d) < 0:
+                        missing += 1
+                        newdata.append(111111)
+                    else:
+                        newdata.append(float(d))
+                if missing > 50000:
+                    continue
                 else:
-                    newdata.append(float(d))
-            if missing > 50000:
-                continue
-            else:
-                imputer = SimpleImputer(missing_values=111111, strategy='median', verbose=0, copy=True)
-                X = imputer.fit_transform(np.array(newdata).reshape(-1, 1))
-                for x in X:
-                    outfile1.write(str(x[0]) + ' ')
-                outfile1.write('\n')
-                outfile2.write(fields_type[i] + ' ' + fields_id[i])
-                outfile2.write('\n')
-        elif 'Categorical' == fields_type[i]:
-            missing = 0
-            newdata = []
-            for d in data:
-                if d == 'NAN':
-                    missing += 1
-                    newdata.append(111111)
-                elif float(d) < 0:
-                    missing += 1
-                    newdata.append(111111)
+                    imputer = SimpleImputer(missing_values=111111, strategy='median', verbose=0, copy=True)
+                    X = imputer.fit_transform(np.array(newdata).reshape(-1, 1))
+                    for x in X:
+                        outfile1.write(str(x[0]) + ' ')
+                    outfile1.write('\n')
+                    outfile2.write(fields_type[i] + ' ' + fields_id[i])
+                    outfile2.write('\n')
+            elif 'Categorical' == fields_type[i]:
+                missing = 0
+                newdata = []
+                cat_num = {}
+                for d in data:
+                    if d == 'NAN':
+                        missing += 1
+                        newdata.append(111111)
+                    elif is_number(d) and float(d) < 0:
+                        missing += 1
+                        newdata.append(111111)
+                    else:
+                        newdata.append(str(d))
+                        if str(d) in cat_num.keys():
+                            cat_num[str(d)] += 1
+                        else:
+                            cat_num[str(d)] = 1
+                if missing > 50000:
+                    continue
                 else:
-                    newdata.append(float(d))
-            if missing > 50000:
-                continue
-            else:
-                imputer = SimpleImputer(missing_values=111111, strategy='most_frequent', verbose=0, copy=True)
-                X = imputer.fit_transform(np.array(newdata).reshape(-1, 1))
-                for x in X:
-                    outfile1.write(str(x[0]) + ' ')
-                outfile1.write('\n')
-                outfile2.write(fields_type[i] + ' ' + fields_id[i])
-                outfile2.write('\n')
+                    # imputer = SimpleImputer(missing_values=111111, strategy='most_frequent', verbose=0, copy=True)
+                    max_num = 0
+                    max_num_cat = None
+                    for key in cat_num.keys():
+                        if cat_num[key] > max_num:
+                            max_num_cat = key
+                            max_num = cat_num[key]
+                    newdata = np.array(newdata)
+                    newdata[newdata == '111111'] = max_num_cat
+                    # X = imputer.fit_transform(newdata.reshape(-1, 1))
+                    X = newdata.reshape((-1, 1))
+                    for x in X:
+                        outfile3.write(str(x[0]) + ' ')
+                    outfile3.write('\n')
+                    outfile4.write(fields_type[i] + ' ' + fields_id[i])
+                    outfile4.write('\n')
+        except Exception as e:
+            print(e)
+            print('field ', field_id, ' appear error when cleaning!')
 
 
 # 将Category类型的数据转变成01类型的数据
 def Category_features_transform():
-    infile_data = open('../data/clean_data/raw_impute_data.txt', 'r')
-    infile_info = open('../data/clean_data/raw_impute_type.txt', 'r')
+    infile_data = open('../data/clean_data/cleaned_categorical_data.txt', 'r')
+    infile_info = open('../data/clean_data/cleaned_categorical_type.txt', 'r')
     fields_id = []
     fields_type = []
     for line in infile_info:
@@ -226,18 +261,18 @@ def Category_features_transform():
         fields_id.append(A[1])
         fields_type.append(A[0])
     infile_info.close()
-    outfile_result = open('../data/clean_data/raw_impute__dummy_data.txt', 'w')
-    outfile_label = open('../data/clean_data/raw_impute__dummy_type.txt', 'w')
+    outfile_result = open('../data/clean_data/cleaned_categorical_dummy_data.txt', 'w')
+    outfile_label = open('../data/clean_data/cleaned_categorical_dummy_type.txt', 'w')
 
     index = 0
     for line in infile_data:
-        if np.mod(index, 2000) == 0:
+        if np.mod(index, 200) == 0:
             print('Iterated transform:', index)
         if line == '\n':
             continue
         A = line.strip().split(' ')
         mylist = list(set(A))
-        if len(mylist) == 1:
+        if len(mylist) == 1 or len(mylist) > 30:
             index += 1
             continue
         if 'Categorical' in fields_type[index]:
@@ -254,7 +289,7 @@ def Category_features_transform():
                 X = np.asarray(step_1).transpose()
                 sizelabel = X.shape[0]
                 for i in range(sizelabel):
-                    outfile_label.write(fields_id[index] + '_' + str(Y[i]) + '\n')
+                    outfile_label.write('Categorical' + ' ' + fields_id[index] + '_' + str(Y[i]) + '\n')
                     outfile_result.write(" ".join(map(str, X[i])))
                     outfile_result.write('\n')
         else:
@@ -264,25 +299,35 @@ def Category_features_transform():
     outfile_result.close()
     infile_data.close()
     outfile_label.close()
-    pass
 
 
 # 通过判断p_value<0.05来筛选特征
 def Features_selection():
     out_file1 = open('../data/features_selection/features_selection_info.txt', 'w')
     out_file2 = open('../data/features_selection/features_selection_data.txt', 'w')
-    n_participants = 502506
+    n_participants = 502505
     field_id_ukb_idx = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
     y = np.zeros(n_participants)
     y[field_id_ukb_idx] = 1
     fields_info = []
-    with open('../data/clean_data/raw_impute_type.txt') as fp:
+    with open('../data/clean_data/cleaned_numerical_type.txt', 'r') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            fields_info.append(line.strip().split())
+    with open('../data/clean_data/cleaned_categorical_dummy_type.txt', 'r') as fp:
         for line in fp:
             if line == '\n':
                 continue
             fields_info.append(line.strip().split())
     x = []
-    with open('../data/clean_data/raw_impute_data.txt') as fp:
+    with open('../data/clean_data/raw_impute_data.txt', 'r') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            x.append(d)
+    with open('../data/clean_data/cleaned_numerical_data.txt', 'r') as fp:
         for line in fp:
             if line == '\n':
                 continue
@@ -291,13 +336,15 @@ def Features_selection():
     x = np.asarray(x, dtype=np.float64)
     features_selection = []
     for i in range(x.shape[0]):
+        if np.mod(i, 50) == 0:
+            print('Has tested feature number:', i)
         train_x = x[i].reshape((-1, 1))
         sm_model = sm.Logit(y, sm.add_constant(train_x)).fit(disp=0)
         p_value = sm_model.pvalues
         print('field_' + fields_info[i][1] + ': ' + str(p_value))
         if p_value[1] < 0.05:
             out_file1.write(' '.join(fields_info[i]) + '\n')
-            out_file2.write(' '.join(x[i].tolist()))
+            out_file2.write(' '.join(x[i].astype(np.str).tolist()))
             out_file2.write('\n')
     out_file1.close()
     out_file2.close()
@@ -331,15 +378,25 @@ class MyModel(keras.Model):
 # fixed_field_index: 需要把weight固定住的字段的坐标列表
 def Function_three():
     # 此处设置控制变量的坐标号
+    fixed_field_id = []
     fixed_field_index = []
+    with open('../data/features_selection/features_selection_info.txt') as fp:
+        for index, line in enumerate(fp):
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            if d[1] in fixed_field_id:
+                fixed_field_index.append(index)
+
     n_participants = 502506
     epoch = 2
     lr = 0.001
     lamda = tf.constant(0.01)
     batch_sz = 512
+
     # x
     x = []
-    with open('../data/clean_data/raw_impute_data.txt') as fp:
+    with open('../data/features_selection/features_selection_data.txt') as fp:
         for line in fp:
             if line == '\n':
                 continue
@@ -352,9 +409,10 @@ def Function_three():
     eid_filter_index = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
     y[eid_filter_index] = 1
     y = tf.constant(y)
-    db_train = tf.data.Dataset.from_tensor_slices((x, y)).shuffle(y.shape[0]).batch(batch_sz)
+
     # x = tf.random.normal(shape=[200, 10])
     # y = tf.random.normal(shape=[200])
+    db_train = tf.data.Dataset.from_tensor_slices((x, y)).shuffle(y.shape[0]).batch(batch_sz)
 
     model = MyModel(fixed_field_index=fixed_field_index)
     optimizer = tf.optimizers.Adam(learning_rate=lr)
@@ -374,11 +432,90 @@ def Function_three():
         model.save_weights('../data/model_wights/MyModel_' + str(epo) + '.ckpt')
 
 
+# 从回归模型参数中提取出不为0的参数并进行排序
+def Sub_Function_three(fixed_field_index):
+    out_file = '../data/features_selection/features_filter_info.npy'
+    model_path = ''
+    model = MyModel()
+
+    x = []
+    with open('../data/features_selection/features_selection_data.txt.txt') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            x.append(d)
+    x = np.asarray(x, dtype=np.float64).transpose()
+
+    # 模型加载参数
+    model.build(input_shape = [None, x.shape[1]])
+    model.load_weights(model_path)
+    model_weights = np.array(model.fc1.trainable_variables[0])
+
+    features_id = []
+    with open('../data/features_selection/features_selection_info.txt') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.split()
+            features_id.append(d[1])
+    features_id = np.array(features_id)
+
+    C = np.zeros(x.shape[1])
+    C[fixed_field_index] = 1
+    C = np.argwhere(C == 0).squeeze()
+    features_id = features_id[C]
+
+    features_id = features_id[~(model_weights == 0)]
+    model_weights = model_weights[~(model_weights == 0)]
+
+    features_id = features_id[np.argsort(model_weights)[-1::-1]]
+    features_id = features_id.reshape((-1, 1))
+    np.save(out_file, features_id)
+
+
+def PCA(train_x, pca_hidden_layers):
+    epoch = 5
+    lr = 0.01
+    batchsz = 512
+
+    encoder_hidden = []
+    for i, neuro_num in enumerate(pca_hidden_layers):
+        if i == len(pca_hidden_layers) - 1:
+            encoder_hidden.append(tf.keras.layers.Dense(neuro_num))
+        else:
+            encoder_hidden.append(tf.keras.layers.Dense(neuro_num, activation=tf.nn.sigmoid))
+    encoder = keras.Sequential(encoder_hidden)
+
+    decoder_hidden = []
+    if len(pca_hidden_layers) > 1:
+        for neuro_num in pca_hidden_layers[-2::-1]:
+            decoder_hidden.append(tf.keras.layers.Dense(neuro_num, activation=tf.nn.sigmoid))
+    decoder_hidden.append(tf.keras.layers.Dense(train_x.shape[1]))
+    decoder = keras.Sequential(decoder_hidden)
+
+    train_db = tf.data.Dataset.from_tensor_slices(train_x).shuffle(train_x.shape[0]).batch(batchsz)
+    optimizer = tf.optimizers.Adam(learning_rate=lr)
+    for epo in range(epoch):
+        for step, x in enumerate(train_db):
+            with tf.GradientTape() as tape:
+                output = encoder(x)
+                output = decoder(output)
+                loss = tf.keras.losses.mean_squared_error(x, output)
+            grades = tape.gradient(loss, [encoder.trainable_variables, decoder.trainable_variables])
+            optimizer.apply_gradients(zip(grades[0], encoder.trainable_variables))
+            optimizer.apply_gradients(zip(grades[1], decoder.trainable_variables))
+    return encoder
+
+
+# 1：首先将想要参考的特征拿出来
+# 2：控制参数进行PCA处理
+# 3：然后用降为后的数据进行聚类分成不同的人群，并训练一个线性回归模型
+# 4：最后修改参考的特征的值，观察它的增幅对每一类人群的影响
+def Function_five_PCA_Linear():
+
+    pass
+
+
 if __name__ == '__main__':
-    # Function_one()
-    # Function_two()
-    # Cols_filter_type()
-    # Clean_field()
-    # Category_features_transform()
-    # Features_selection()
-    Function_three()
+    Features_selection()
