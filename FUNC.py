@@ -29,8 +29,8 @@ def Function_one():
     hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
 
-    self_report_cancer_list = ['1111']
-    self_report_non_cancer_list = ['1074', '1075']
+    self_report_cancer_list = []
+    self_report_non_cancer_list = []
 
     if len(self_report_cancer_list) > 1 or self_report_cancer_list[0] != '':
         if os.path.exists(field_20001_path):
@@ -108,19 +108,6 @@ def Function_one():
                 writer.writerow(ukb_self_report_non_cancer.iloc[i])
 
 
-# 从ukb41910文件中将字段类型为Categorical, Integer, Continuous的字段抽出来
-def Cols_filter_type():
-    outfp = open('../data/cols_filter.txt', 'w')
-    with open('../data/cols_type.txt', 'r') as fp:
-        for line in fp:
-            if line == '\n':
-                continue
-            row = line.strip().split('\t')
-            if row[0] in ['Categorical', 'Integer', 'Continuous']:
-                outfp.write(line)
-    outfp.close()
-
-
 # 将所有字段都分别抽出来
 def Function_two():
     cols_id = []
@@ -159,25 +146,25 @@ def is_number(s):
 
 # 对numerical类型的特征进行清洗
 def Clean_field():
-    outfile1 = '../data/clean_data/cleaned_numerical_data.txt'
-    outfile2 = '../data/clean_data/cleaned_numerical_type.txt'
-    outfile3 = '../data/clean_data/cleaned_categorical_data.txt'
-    outfile4 = '../data/clean_data/cleaned_categorical_type.txt'
+    infile = '../data/cols_filter/lifeStyle_and_physical_measures_cols_filter.csv'
+    outfile1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
+    outfile2 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
 
     fields_id = []
     fields_type = []
-    with open('../data/cols_filter.txt', 'r') as fp:
-        for line in fp:
-            if line == '\n':
+    fields_des = []
+    with open(infile, 'r') as fp:
+        infileReader = csv.reader(fp)
+        for line in infileReader:
+            if len(line) == 0:
                 continue
-            row = line.strip().split('\t')
-            fields_type.append(row[0])
-            fields_id.append(row[1])
+            fields_type.append(line[0].strip())
+            fields_id.append(line[1].strip())
+            fields_des.append(line[2].strip())
 
     outfile1 = open(outfile1, 'w')
-    outfile2 = open(outfile2, 'w')
-    outfile3 = open(outfile3, 'w')
-    outfile4 = open(outfile4, 'w')
+    outfile2 = open(outfile2, 'w', newline='')
+    outfile2Writer = csv.writer(outfile2)
     for i, field_id in enumerate(fields_id):
         try:
             if np.mod(i, 100) == 0:
@@ -205,8 +192,7 @@ def Clean_field():
                     for x in X:
                         outfile1.write(str(x[0]) + ' ')
                     outfile1.write('\n')
-                    outfile2.write(fields_type[i] + ' ' + fields_id[i])
-                    outfile2.write('\n')
+                    outfile2Writer.writerow([fields_type[i], fields_id[i], fields_des[i]])
             elif 'Categorical' == fields_type[i]:
                 missing = 0
                 newdata = []
@@ -227,7 +213,6 @@ def Clean_field():
                 if missing > 50000:
                     continue
                 else:
-                    # imputer = SimpleImputer(missing_values=111111, strategy='most_frequent', verbose=0, copy=True)
                     max_num = 0
                     max_num_cat = None
                     for key in cat_num.keys():
@@ -236,16 +221,17 @@ def Clean_field():
                             max_num = cat_num[key]
                     newdata = np.array(newdata)
                     newdata[newdata == '111111'] = max_num_cat
-                    # X = imputer.fit_transform(newdata.reshape(-1, 1))
+
                     X = newdata.reshape((-1, 1))
                     for x in X:
-                        outfile3.write(str(x[0]) + ' ')
-                    outfile3.write('\n')
-                    outfile4.write(fields_type[i] + ' ' + fields_id[i])
-                    outfile4.write('\n')
+                        outfile1.write(str(x[0]) + ' ')
+                    outfile1.write('\n')
+                    outfile2Writer.writerow([fields_type[i], fields_id[i], fields_des[i]])
         except Exception as e:
             print(e)
             print('field ', field_id, ' appear error when cleaning!')
+    outfile1.close()
+    outfile2.close()
 
 
 # 将Category类型的数据转变成01类型的数据
@@ -303,48 +289,53 @@ def Category_features_transform():
 
 # 通过判断p_value<0.05来筛选特征
 def Features_selection():
-    out_file1 = open('../data/features_selection/features_selection_info.txt', 'w')
-    out_file2 = open('../data/features_selection/features_selection_data.txt', 'w')
+    out_file1 = '../data/features_selection/features_selection_info.csv'
+    out_file2 = '../data/features_selection/features_selection_data.txt'
+    in_file1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
+    in_file2 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
+    eid_filter_file = '../data/eid_filter/eid_filter.csv'
+
+    out_file1 = open(out_file1, 'w', newline='')
+    out_file2 = open(out_file2, 'w')
+    out_file1_writer = csv.writer(out_file1)
+
     n_participants = 502505
-    field_id_ukb_idx = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
+    field_id_ukb_idx = np.genfromtxt(eid_filter_file, delimiter=',', dtype=np.int32)[1:, 0]
     y = np.zeros(n_participants)
     y[field_id_ukb_idx] = 1
     fields_info = []
-    with open('../data/clean_data/cleaned_numerical_type.txt', 'r') as fp:
-        for line in fp:
-            if line == '\n':
+    with open(in_file1, 'r') as fp:
+        reader = csv.reader(fp)
+        for line in reader:
+            if len(line) == 0:
                 continue
-            fields_info.append(line.strip().split())
-    with open('../data/clean_data/cleaned_categorical_dummy_type.txt', 'r') as fp:
-        for line in fp:
-            if line == '\n':
-                continue
-            fields_info.append(line.strip().split())
+            else:
+                fields_info.append(line)
+
     x = []
-    with open('../data/clean_data/raw_impute_data.txt', 'r') as fp:
-        for line in fp:
-            if line == '\n':
-                continue
-            d = line.strip().split()
-            x.append(d)
-    with open('../data/clean_data/cleaned_numerical_data.txt', 'r') as fp:
+    with open(in_file2, 'r') as fp:
         for line in fp:
             if line == '\n':
                 continue
             d = line.strip().split()
             x.append(d)
     x = np.asarray(x, dtype=np.float64)
-    features_selection = []
+
     for i in range(x.shape[0]):
         if np.mod(i, 50) == 0:
             print('Has tested feature number:', i)
         train_x = x[i].reshape((-1, 1))
         sm_model = sm.Logit(y, sm.add_constant(train_x)).fit(disp=0)
         p_value = sm_model.pvalues
-        print('field_' + fields_info[i][1] + ': ' + str(p_value))
+        params = sm_model.params
+        print('field_' + fields_info[i][1] + ' p-value: ' + str(p_value))
+        print('field_' + fields_info[i][1] + '  params: ' + str(params))
+
         if p_value[1] < 0.05:
-            out_file1.write(' '.join(fields_info[i]) + '\n')
-            out_file2.write(' '.join(x[i].astype(np.str).tolist()))
+            fields_info[i].append(p_value[1])
+            fields_info[i].append(np.exp(params[1]))
+            out_file1_writer.writerow(fields_info[i])
+            out_file2.write(' '.join(x[i].astype(str).tolist()))
             out_file2.write('\n')
     out_file1.close()
     out_file2.close()
