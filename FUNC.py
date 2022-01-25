@@ -16,13 +16,12 @@ import statsmodels.api as sm
 
 
 # 通过指定的icd9，icd10，self-report获取eid
-def Function_one():
+def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     global ukb_self_report_cancer, ukb_self_report_non_cancer
     field_20001_path = '../data/field_extraction/field_20001.csv'
     field_20002_path = '../data/field_extraction/field_20002.csv'
     save_path = '../data/eid_filter/eid_filter.csv'
 
-    data = {}
     # 默认查询冠心病
     icd10_list = [r'I20.*', r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
     icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
@@ -109,7 +108,7 @@ def Function_one():
 
 
 # 将所有字段都分别抽出来
-def Function_two():
+def extract_all_features():
     cols_id = []
     with open('../data/cols_type.txt', 'r') as fp:
         for line in fp:
@@ -128,6 +127,7 @@ def Function_two():
     Field_extraction(cols_id)
 
 
+# 判断是不是数字
 def is_number(s):
     try:
         float(s)
@@ -145,7 +145,7 @@ def is_number(s):
 
 
 # 对numerical类型的特征进行清洗
-def Clean_field():
+def clean_field():
     infile = '../data/cols_filter/lifeStyle_and_physical_measures_cols_filter.csv'
     outfile1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
     outfile2 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
@@ -235,7 +235,7 @@ def Clean_field():
 
 
 # 将Category类型的数据转变成01类型的数据
-def Category_features_transform():
+def category_features_transform():
     infile_data = open('../data/clean_data/cleaned_categorical_data.txt', 'r')
     infile_info = open('../data/clean_data/cleaned_categorical_type.txt', 'r')
     fields_id = []
@@ -288,7 +288,7 @@ def Category_features_transform():
 
 
 # 通过判断p_value<0.05来筛选特征
-def Features_selection():
+def features_selection():
     out_file1 = '../data/features_selection/features_selection_info.csv'
     out_file2 = '../data/features_selection/features_selection_data.txt'
     in_file1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
@@ -367,7 +367,7 @@ class MyModel(keras.Model):
 
 # 用单层的全连接层训练并将连接层中的weight提取出来进行特征权重的判断
 # fixed_field_index: 需要把weight固定住的字段的坐标列表
-def Function_three():
+def linearRegression_training():
     # 此处设置控制变量的坐标号
     fixed_field_id = []
     fixed_field_index = []
@@ -424,7 +424,7 @@ def Function_three():
 
 
 # 从回归模型参数中提取出不为0的参数并进行排序
-def Sub_Function_three(fixed_field_index):
+def sub_Function_three(fixed_field_index):
     out_file = '../data/features_selection/features_filter_info.npy'
     model_path = ''
     model = MyModel()
@@ -465,7 +465,7 @@ def Sub_Function_three(fixed_field_index):
     np.save(out_file, features_id)
 
 
-def PCA(train_x, pca_hidden_layers):
+def pca(train_x, pca_hidden_layers):
     epoch = 5
     lr = 0.01
     batchsz = 512
@@ -503,10 +503,9 @@ def PCA(train_x, pca_hidden_layers):
 # 2：控制参数进行PCA处理
 # 3：然后用降为后的数据进行聚类分成不同的人群，并训练一个线性回归模型
 # 4：最后修改参考的特征的值，观察它的增幅对每一类人群的影响
-def Function_five_PCA_Linear():
-
+def pca_and_Linear():
     pass
 
 
 if __name__ == '__main__':
-    Features_selection()
+    pass
