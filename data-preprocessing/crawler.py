@@ -10,8 +10,8 @@ from collections import defaultdict
 
 # 从ukb4190.html文件中将各个字段的字段类型抽取出来(此程序在服务器端不能读取ukb41910.html文件，但在本地电脑跑可以)
 def Cols_type_extraction():
-    fp = open('../ukb41910.html', 'r')
-    outfile = open('../data/cols_type.txt', 'w')
+    fp = open('../../ukb41910.html', 'r')
+    outfile = open('../../data/cols_type.txt', 'w')
     f = fp.read()
     fp.close()
 
@@ -37,7 +37,7 @@ def Cols_type_extraction():
 
 # 从ukbb官网中爬取字段的类型（由于此爬虫使用selenium，需要配置环境，因此最好在本地爬取）
 def Extract_data_category_from_ukbWebsite():
-    path = '../data/data_category/'
+    path = '../../data/data_category/'
     if not os.path.exists(path):
         os.mkdir(path)
     url = 'https://biobank.ndph.ox.ac.uk/showcase/cats.cgi'

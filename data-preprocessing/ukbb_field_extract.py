@@ -15,7 +15,7 @@ import csv
 # 只针对于20001，20002字段的提取
 def Field_extract_for_self_report(field_id):
     n_participants = 502505
-    source_file = '../ukb41910.csv'
+    source_file = '../../ukb41910.csv'
     df = pd.read_csv(source_file, encoding='cp936', nrows=1)
     columns = df.columns
     cols = ['eid']
@@ -45,7 +45,7 @@ def Field_extract_for_self_report(field_id):
 
 # ukb文件字段提取
 def Field_extraction(cols_id):
-    source_file = '../ukb41910.csv'
+    source_file = '../../ukb41910.csv'
     df = pd.read_csv(source_file, encoding='cp936', nrows=1)
     columns = df.columns
 

@@ -4,7 +4,7 @@ import csv
 # 从ukb41910文件中将字段类型为Categorical, Integer, Continuous的字段抽出来
 def Cols_filter_type():
     outfp = open('../data/cols_filter.txt', 'w')
-    with open('../data/cols_type.txt', 'r') as fp:
+    with open('../../data/cols_type.txt', 'r') as fp:
         for line in fp:
             if line == '\n':
                 continue

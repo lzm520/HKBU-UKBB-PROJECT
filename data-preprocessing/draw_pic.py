@@ -17,8 +17,8 @@ def logit_pic(X, y, title):
 
 if __name__ == '__main__':
     data_fiile = '../data/features_selection/features_selection_data.txt'
-    read_file = '../data/features_selection/features_selection_info.csv'
-    eid_filter_file = '../data/eid_filter/eid_filter.csv'
+    read_file = '../../data/features_selection/features_selection_info.csv'
+    eid_filter_file = '../../data/eid_filter/eid_filter.csv'
     find_filed_id = '48'
 
     n_participants = 502505

@@ -1,6 +1,6 @@
 import os
 
-for chro in range(1, 23):
+for chro in range(1, 22):
     bgen = f'/home/comp/ericluzhang/UKBB/ukb_imp_chr{chro}_v3.bgen'
     sample = f'/home/comp/ericluzhang/UKBB/ukb60434_imp_chr{chro}_v3_s487280.sample'
     out = f'/tmp/local/cszmli/plink/UKBB_chr{chro}'

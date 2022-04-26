@@ -1,6 +1,5 @@
 """ 此pyhon文件集中了所有的功能 """
 import os
-import sys
 
 import tensorflow as tf
 from tensorflow import keras
@@ -8,9 +7,8 @@ import numpy as np
 import pandas as pd
 import re
 import csv
-from lxml import etree
-from LZM.hes_diag_filter import HES_diagnosis
-from LZM.ukbb_field_extract import Field_extract_for_self_report, Field_extraction
+from python_code.hes_diag_filter import HES_diagnosis
+from python_code.ukbb_field_extract import Field_extract_for_self_report, Field_extraction
 from sklearn.impute import SimpleImputer
 import statsmodels.api as sm
 
@@ -18,31 +16,37 @@ import statsmodels.api as sm
 # 通过指定的icd9，icd10，self-report获取eid
 def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     global ukb_self_report_cancer, ukb_self_report_non_cancer
-    field_20001_path = '../data/field_extraction/field_20001.csv'
-    field_20002_path = '../data/field_extraction/field_20002.csv'
-    save_path = '../data/eid_filter/eid_filter.csv'
+    field_20001_path = '../../data/field_extraction/field_20001.csv'
+    field_20002_path = '../../data/field_extraction/field_20002.csv'
+    save_path = '../../data/eid_filter/eid_filter.csv'
 
-    # 默认查询冠心病
-    icd10_list = [r'I20.*', r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
-    icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
+    # CAD
+    # icd10_list = [r'I20.*', r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
+    # icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
+
+    # Type2 Diabetes
+    icd10_list = [r'E11*']
+    icd9_list = []
+    # Extract patients from clinical records
     hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
 
     self_report_cancer_list = []
-    self_report_non_cancer_list = []
+    self_report_non_cancer_list = [r'1248']
 
-    if len(self_report_cancer_list) > 1 or self_report_cancer_list[0] != '':
+    # Extract patients from self-report records (Field 20001)
+    if len(self_report_cancer_list) > 0 and self_report_cancer_list[0] != '':
         if os.path.exists(field_20001_path):
-            data = []
+            dat = []
             with open(field_20001_path, 'r') as fp:
                 reader = csv.reader(fp)
                 for i, row in enumerate(reader):
                     if i == 0:
                         continue
-                    if np.mod(i, 5000) == 0:
+                    if np.mod(i, 50000) == 0:
                         print('Iterated entries 20001:', i)
-                    data.append(row)
-            ukb_self_report_cancer = pd.DataFrame(data, columns=['eid', '20001'])
+                    dat.append(row)
+            ukb_self_report_cancer = pd.DataFrame(dat, columns=['eid', '20001'])
         else:
             ukb_self_report_cancer = Field_extract_for_self_report('20001')
             ukb_self_report_cancer = pd.DataFrame(ukb_self_report_cancer)
@@ -54,18 +58,19 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
                     data[idx] = ukb_self_report_cancer.loc[idx, 'eid']
                     break
 
-    if len(self_report_non_cancer_list) > 1 or self_report_non_cancer_list[0] != '':
+    # Extract patients from self-report records (Field 20002)
+    if len(self_report_non_cancer_list) > 0 and self_report_non_cancer_list[0] != '':
         if os.path.exists(field_20002_path):
-            data = []
-            with open(field_20001_path, 'r') as fp:
+            dat = []
+            with open(field_20002_path, 'r') as fp:
                 reader = csv.reader(fp)
                 for i, row in enumerate(reader):
                     if i == 0:
                         continue
-                    if np.mod(i, 5000) == 0:
+                    if np.mod(i, 50000) == 0:
                         print('Iterated entries 20002:', i)
-                    data.append(row)
-            ukb_self_report_non_cancer = pd.DataFrame(data, columns=['eid', '20002'])
+                    dat.append(row)
+            ukb_self_report_non_cancer = pd.DataFrame(dat, columns=['eid', '20002'])
         else:
             ukb_self_report_non_cancer = Field_extract_for_self_report('20002')
             ukb_self_report_non_cancer = pd.DataFrame(ukb_self_report_non_cancer)
@@ -78,13 +83,14 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
                     break
     df = pd.DataFrame({'ukb_index': list(data.keys()), 'eid': list(data.values())})
 
+    # Save file
     if not os.path.exists(os.path.dirname(save_path)):
         os.makedirs(os.path.dirname(save_path))
     with open(save_path, 'w', newline='') as fp:
         writer = csv.writer(fp)
         writer.writerow(['ukb_index', 'eid'])
         for i in range(df.shape[0]):
-            if np.mod(i, 5000):
+            if np.mod(i, 500) == 0:
                 print('Iterated save patients:', i)
             writer.writerow(df.iloc[i])
 
@@ -93,7 +99,7 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
             writer = csv.writer(fp)
             writer.writerow(['eid', '20001'])
             for i in range(ukb_self_report_cancer.shape[0]):
-                if np.mod(i, 5000):
+                if np.mod(i, 5000) == 0:
                     print('Iterated save 20001:', i)
                 writer.writerow(ukb_self_report_cancer.iloc[i])
 
@@ -102,7 +108,7 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
             writer = csv.writer(fp)
             writer.writerow(['eid', '20002'])
             for i in range(ukb_self_report_cancer.shape[0]):
-                if np.mod(i, 5000):
+                if np.mod(i, 5000) == 0:
                     print('Iterated save 20002:', i)
                 writer.writerow(ukb_self_report_non_cancer.iloc[i])
 
@@ -110,7 +116,7 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
 # 将所有字段都分别抽出来
 def extract_all_features():
     cols_id = []
-    with open('../data/cols_type.txt', 'r') as fp:
+    with open('../../data/cols_type.txt', 'r') as fp:
         for line in fp:
             if line == '\n':
                 continue
@@ -119,7 +125,7 @@ def extract_all_features():
     cols_id.remove('20001')
     cols_id.remove('20002')
     A = None
-    for _, _, c in os.walk('../data/field_extraction/fields'):
+    for _, _, c in os.walk('../../data/field_extraction/fields'):
         A = c
     for f in A:
         cols_id.remove(f[6: -4])
@@ -144,7 +150,7 @@ def is_number(s):
     return False
 
 
-# 对numerical类型的特征进行清洗
+# 清洗特征——填充和删除缺失值大于missingValue的特征
 def clean_field():
     infile = '../data/cols_filter/lifeStyle_and_physical_measures_cols_filter.csv'
     outfile1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
@@ -236,50 +242,50 @@ def clean_field():
 
 # 将Category类型的数据转变成01类型的数据
 def category_features_transform():
-    infile_data = open('../data/clean_data/cleaned_categorical_data.txt', 'r')
-    infile_info = open('../data/clean_data/cleaned_categorical_type.txt', 'r')
-    fields_id = []
-    fields_type = []
-    for line in infile_info:
-        if line == '\n':
-            continue
-        A = line.strip().split(' ')
-        fields_id.append(A[1])
-        fields_type.append(A[0])
-    infile_info.close()
-    outfile_result = open('../data/clean_data/cleaned_categorical_dummy_data.txt', 'w')
-    outfile_label = open('../data/clean_data/cleaned_categorical_dummy_type.txt', 'w')
+    infile_data = open('../../data/features_selection/features_selection_data.txt', 'r')
+    infile_info = open('../../data/features_selection/features_selection_info.csv', 'r')
 
+    field_info = []
+    reader = csv.reader(infile_info)
+    for line in reader:
+        field_info.append([line[0], line[1], line[2]])
+    infile_info.close()
+
+    outfile_result = open('../../data/features_selection/features_selection_data_dummy_data.txt', 'w')
+    outfile_label = open('../../data/features_selection/features_selection_data_dummy_info.csv', 'w', newline='')
+    outfile_label_writer = csv.writer(outfile_label)
     index = 0
     for line in infile_data:
-        if np.mod(index, 200) == 0:
+        if np.mod(index, 50) == 0:
             print('Iterated transform:', index)
         if line == '\n':
             continue
-        A = line.strip().split(' ')
-        mylist = list(set(A))
-        if len(mylist) == 1 or len(mylist) > 30:
-            index += 1
-            continue
-        if 'Categorical' in fields_type[index]:
-            if len(mylist) == 2:
-                outfile_label.write(fields_id[index] + '\n')
-                outfile_result.write(line)
-            else:
-                df = pd.DataFrame(data=np.asarray(A), columns=['data'])
-                just_dummies = pd.get_dummies(df['data'])
-                step_1 = pd.concat([df, just_dummies], axis=1)
-                step_1.drop(['data'], inplace=True, axis=1)
-                step_1 = step_1.applymap(np.int32)
-                Y = step_1.columns
-                X = np.asarray(step_1).transpose()
-                sizelabel = X.shape[0]
-                for i in range(sizelabel):
-                    outfile_label.write('Categorical' + ' ' + fields_id[index] + '_' + str(Y[i]) + '\n')
-                    outfile_result.write(" ".join(map(str, X[i])))
-                    outfile_result.write('\n')
+        if 'Categorical' in field_info[index][0]:
+            A = line.strip().split(' ')
+            mylist = list(set(A))
+            if len(mylist) == 1 or len(mylist) > 30:
+                index += 1
+                continue
+            # if len(mylist) == 2:
+            #     outfile_label.write(fields_id[index] + '\n')
+            #     outfile_result.write(line)
+            # else:
+            df = pd.DataFrame(data=np.asarray(A), columns=['data'])
+            just_dummies = pd.get_dummies(df['data'])
+            step_1 = pd.concat([df, just_dummies], axis=1)
+            step_1.drop(['data'], inplace=True, axis=1)
+            step_1 = step_1.applymap(np.int32)
+            Y = step_1.columns
+            X = np.asarray(step_1).transpose()
+            sizelabel = X.shape[0]
+            info = [field_info[index][0], field_info[index][1], field_info[index][2]]
+            for i in range(sizelabel):
+                info[1] = field_info[index][1] + '_' + str(int(float(Y[i])))
+                outfile_label_writer.writerow(info)
+                outfile_result.write(" ".join(map(str, X[i])))
+                outfile_result.write('\n')
         else:
-            outfile_label.write(fields_id[index] + '\n')
+            outfile_label_writer.writerow(field_info[index])
             outfile_result.write(line)
         index += 1
     outfile_result.close()
@@ -293,7 +299,7 @@ def features_selection():
     out_file2 = '../data/features_selection/features_selection_data.txt'
     in_file1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
     in_file2 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
-    eid_filter_file = '../data/eid_filter/eid_filter.csv'
+    eid_filter_file = '../../data/eid_filter/eid_filter.csv'
 
     out_file1 = open(out_file1, 'w', newline='')
     out_file2 = open(out_file2, 'w')
@@ -379,7 +385,7 @@ def linearRegression_training():
             if d[1] in fixed_field_id:
                 fixed_field_index.append(index)
 
-    n_participants = 502506
+    n_participants = 502505
     epoch = 2
     lr = 0.001
     lamda = tf.constant(0.01)
@@ -387,7 +393,7 @@ def linearRegression_training():
 
     # x
     x = []
-    with open('../data/features_selection/features_selection_data.txt') as fp:
+    with open('../../data/features_selection/features_selection_data.txt') as fp:
         for line in fp:
             if line == '\n':
                 continue
@@ -397,7 +403,7 @@ def linearRegression_training():
     x = tf.constant(x)
     # y
     y = np.zeros(n_participants)
-    eid_filter_index = np.genfromtxt('../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
+    eid_filter_index = np.genfromtxt('../../data/eid_filter/eid_filter.csv', delimiter=',', dtype=np.int32)[1:, 0]
     y[eid_filter_index] = 1
     y = tf.constant(y)
 
@@ -508,4 +514,5 @@ def pca_and_Linear():
 
 
 if __name__ == '__main__':
+    category_features_transform()
     pass
