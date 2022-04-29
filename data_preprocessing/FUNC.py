@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import re
 import csv
-from python_code.hes_diag_filter import HES_diagnosis
-from python_code.ukbb_field_extract import Field_extract_for_self_report, Field_extraction
+from python_code.data_preprocessing.hes_diag_filter import HES_diagnosis
+from python_code.data_preprocessing.ukbb_field_extract import Field_extract_for_self_report, Field_extraction
 from sklearn.impute import SimpleImputer
 import statsmodels.api as sm
 
