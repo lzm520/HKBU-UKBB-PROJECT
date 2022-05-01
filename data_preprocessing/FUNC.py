@@ -240,6 +240,60 @@ def clean_field():
     outfile2.close()
 
 
+# 通过判断p_value<0.05来筛选特征
+def features_selection():
+    out_file1 = '../data/features_selection/features_selection_info.csv'
+    out_file2 = '../data/features_selection/features_selection_data.txt'
+    in_file1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
+    in_file2 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
+    eid_filter_file = '../../data/eid_filter/eid_filter.csv'
+
+    out_file1 = open(out_file1, 'w', newline='')
+    out_file2 = open(out_file2, 'w')
+    out_file1_writer = csv.writer(out_file1)
+
+    n_participants = 502505
+    field_id_ukb_idx = np.genfromtxt(eid_filter_file, delimiter=',', dtype=np.int32)[1:, 0]
+    y = np.zeros(n_participants)
+    y[field_id_ukb_idx] = 1
+    fields_info = []
+    with open(in_file1, 'r') as fp:
+        reader = csv.reader(fp)
+        for line in reader:
+            if len(line) == 0:
+                continue
+            else:
+                fields_info.append(line)
+
+    x = []
+    with open(in_file2, 'r') as fp:
+        for line in fp:
+            if line == '\n':
+                continue
+            d = line.strip().split()
+            x.append(d)
+    x = np.asarray(x, dtype=np.float64)
+
+    for i in range(x.shape[0]):
+        if np.mod(i, 50) == 0:
+            print('Has tested feature number:', i)
+        train_x = x[i].reshape((-1, 1))
+        sm_model = sm.Logit(y, sm.add_constant(train_x)).fit(disp=0)
+        p_value = sm_model.pvalues
+        params = sm_model.params
+        print('field_' + fields_info[i][1] + ' p-value: ' + str(p_value))
+        print('field_' + fields_info[i][1] + '  params: ' + str(params))
+
+        if p_value[1] < 0.05:
+            fields_info[i].append(p_value[1])
+            fields_info[i].append(np.exp(params[1]))
+            out_file1_writer.writerow(fields_info[i])
+            out_file2.write(' '.join(x[i].astype(str).tolist()))
+            out_file2.write('\n')
+    out_file1.close()
+    out_file2.close()
+
+
 # 将Category类型的数据转变成01类型的数据
 def category_features_transform():
     infile_data = open('../../data/features_selection/features_selection_data.txt', 'r')
@@ -293,58 +347,50 @@ def category_features_transform():
     outfile_label.close()
 
 
-# 通过判断p_value<0.05来筛选特征
-def features_selection():
-    out_file1 = '../data/features_selection/features_selection_info.csv'
-    out_file2 = '../data/features_selection/features_selection_data.txt'
-    in_file1 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_type.csv'
-    in_file2 = '../data/clean_data/cleaned_lifeStyle_and_physical_measures_data.txt'
-    eid_filter_file = '../../data/eid_filter/eid_filter.csv'
+# 获取模型训练数据
+def access_model_training_data():
+    feature_data_path = '../../data/features_selection/features_selection_data_dummy_data.txt'
+    feature_info_path = '../../data/features_selection/features_selection_data_dummy_info.csv'
+    eids_path = '../../data/field_extraction/eids.csv'
+    mr_data_path = '../../data/MR_analysis/ivw_ebi.csv'
+    training_data_fam_path = '../../data/testing_data.fam'
+    training_data_save_path = '../../data/model_training_data/training_data_info.csv'
+    training_data_info_save_path = '../../data/model_training_data/training_data.npy'
 
-    out_file1 = open(out_file1, 'w', newline='')
-    out_file2 = open(out_file2, 'w')
-    out_file1_writer = csv.writer(out_file1)
+    # features data loading
+    feature_data = np.genfromtxt(feature_data_path)
+    feature_info = pd.read_csv(feature_info_path, header=None,
+                               names=['Type', 'id', 'Description'])
+    # eids loading
+    eids = pd.read_csv(eids_path)['eid'].to_numpy()
 
-    n_participants = 502505
-    field_id_ukb_idx = np.genfromtxt(eid_filter_file, delimiter=',', dtype=np.int32)[1:, 0]
-    y = np.zeros(n_participants)
-    y[field_id_ukb_idx] = 1
-    fields_info = []
-    with open(in_file1, 'r') as fp:
-        reader = csv.reader(fp)
-        for line in reader:
-            if len(line) == 0:
-                continue
-            else:
-                fields_info.append(line)
+    # mr data loading
+    ivw_data = pd.read_csv(mr_data_path)
+    sig_phenotype_list = ivw_data[ivw_data['pval'] < 0.05].reset_index()['exposure'].to_list()
+    sig_phenotype = []
+    for pheno in sig_phenotype_list:
+        sig_phenotype.append(str.split(pheno, "||")[0].strip())
 
-    x = []
-    with open(in_file2, 'r') as fp:
-        for line in fp:
-            if line == '\n':
-                continue
-            d = line.strip().split()
-            x.append(d)
-    x = np.asarray(x, dtype=np.float64)
-
-    for i in range(x.shape[0]):
-        if np.mod(i, 50) == 0:
-            print('Has tested feature number:', i)
-        train_x = x[i].reshape((-1, 1))
-        sm_model = sm.Logit(y, sm.add_constant(train_x)).fit(disp=0)
-        p_value = sm_model.pvalues
-        params = sm_model.params
-        print('field_' + fields_info[i][1] + ' p-value: ' + str(p_value))
-        print('field_' + fields_info[i][1] + '  params: ' + str(params))
-
-        if p_value[1] < 0.05:
-            fields_info[i].append(p_value[1])
-            fields_info[i].append(np.exp(params[1]))
-            out_file1_writer.writerow(fields_info[i])
-            out_file2.write(' '.join(x[i].astype(str).tolist()))
-            out_file2.write('\n')
-    out_file1.close()
-    out_file2.close()
+    # training data processing
+    fam_train = pd.read_table(training_data_fam_path, header=None)
+    eids_train = fam_train[0].to_numpy()
+    eids_train_list = []
+    for eid in eids_train:
+        eids_train_list.append(np.where(eids == eid)[0][0])
+    feature_data_train = feature_data[:, eids_train_list]
+    data_train = []
+    info_train = []
+    for i in range(feature_info.shape[0]):
+        description = feature_info.loc[i, 'Description']
+        if description in sig_phenotype:
+            data_train.append(feature_data_train[i])
+            info_train.append(feature_info.loc[i].to_numpy())
+    # training data saving
+    with open(training_data_save_path, 'w', newline='') as fp:
+        writer = csv.writer(fp)
+        for info in info_train:
+            writer.writerow(info)
+    np.save(training_data_info_save_path, data_train)
 
 
 class MyModel(keras.Model):
