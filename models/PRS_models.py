@@ -13,14 +13,15 @@ class myModel(tf.keras.Model):
         self.W = []
         # weight for numerical phenotype
         for i in range(n_phenotype-len(n_categorical_phenotype_feature)):
-            self.W.append(tf.Variable(tf.random.normal(shape=(2, 1), dtype=tf.float64), trainable=True))
+            self.W.append(tf.Variable(tf.random.normal(shape=(2, 1), dtype=tf.float32), trainable=True))
         # weight for categorical phenotype
         for n in n_categorical_phenotype_feature:
-            self.W.append(tf.Variable(tf.random.normal(shape=(2, n), dtype=tf.float64), trainable=True))
+            self.W.append(tf.Variable(tf.random.normal(shape=(2, n), dtype=tf.float32), trainable=True))
         # confidence matrix for every features
-        self.M = tf.Variable(tf.random.normal(shape=[2, n_phenotype], dtype=tf.float64), trainable=True)
+        self.M = tf.Variable(tf.random.normal(shape=[2, n_phenotype], dtype=tf.float32), trainable=True)
 
-    def forward(self, numerical_x: list, categorical_x: list):
+    def call(self, inputs, training=None, mask=None):
+        numerical_x, categorical_x = inputs
         outputs = []
         # processing numerical data
         k = 0
@@ -29,7 +30,7 @@ class myModel(tf.keras.Model):
             out = tf.reshape(out, shape=[1, -1])
             out = tf.matmul(self.W[k], out)
             out = tf.sigmoid(out)
-            out = tf.matmul(self.M[:, k], out)
+            out = tf.reshape(self.M[:, k], shape=[2, 1]) * out
             outputs.append(out)
             k += 1
         # processing categorical data
@@ -39,7 +40,7 @@ class myModel(tf.keras.Model):
                 out = tf.reshape(x, shape=[-1, 1])
             out = tf.matmul(self.W[k], tf.transpose(out))
             out = tf.sigmoid(out)
-            out = tf.matmul(self.M[:, k], out)
+            out = tf.reshape(self.M[:, k], shape=[2, 1]) * out
             outputs.append(out)
             k += 1
 
@@ -58,6 +59,6 @@ class PRS_model(tf.keras.Model, ABC):
         self.w = tf.Variable(tf.random.normal(shape=[1]))
         self.b = tf.Variable(tf.random.normal(shape=[1]))
 
-    def forward(self, score):
+    def call(self, score, training=None, mask=None):
         logit = 1 / (1 + tf.exp(-(self.w * score + self.b)))
         return logit

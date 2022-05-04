@@ -1,10 +1,8 @@
 import os
 import time
 
-import tensorflow as tf
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from PRS_models import *
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
@@ -15,10 +13,10 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
                 n_epoch=1000):
     # model instance
     n_categorical_phenotype_feature = [idx_e - idx_s for (idx_s, idx_e) in categorical_phenotype_idx]
-    pred = myModel(num_phenotype, n_categorical_phenotype_feature)
+    pred_model = myModel(num_phenotype, n_categorical_phenotype_feature)
     optimizer_pred = tf.optimizers.Adadelta(rho=0.95, clipvalue=0.001)
 
-    prs = PRS_model()
+    prs_model = PRS_model()
     optimizer_prs = tf.optimizers.Adadelta(rho=0.95, clipvalue=0.001)
 
     loss_fc = tf.losses.KLDivergence()
@@ -36,24 +34,25 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
         for step, (x, y, prs) in enumerate(db):
             numerical_x = [x[:, idx] for idx in numerical_phenotype_idx]
             categorical_x = [x[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
-            y_true = tf.one_hot(indices=y, depth=2, dtype=tf.float64)
+            y_true = tf.one_hot(indices=y, depth=2, dtype=tf.float32)
+            y = tf.cast(y, tf.float32)
             with tf.GradientTape(persistent=True) as tape:
                 # result
-                result_pred = tf.transpose(pred(numerical_x, categorical_x))
-                result_prs = prs(prs)
-
+                result_pred = pred_model((numerical_x, categorical_x))
+                result_pred = tf.transpose(result_pred)
+                result_prs = prs_model(prs)
                 # loss calculation
-                kl = loss_fc(result_pred[: 1], result_prs)
+                kl = loss_fc(result_pred[:, 1], result_prs)
                 loss_f = tf.reduce_mean(tf.losses.categorical_crossentropy(y_true, result_pred))
                 loss_prs = -tf.reduce_mean(y * tf.math.log(result_prs) + (1 - y) * tf.math.log(1 - result_prs))
                 loss = loss_prs + alpha * kl + beta * loss_f
 
             # parameters update
-            grads_pred = tape.gradient(loss, pred.trainable_variables)
-            grads_prs = tape.gradient(loss, prs.trainable_variables)
+            grads_pred = tape.gradient(loss, pred_model.trainable_variables)
+            grads_prs = tape.gradient(loss, prs_model.trainable_variables)
             del tape
-            optimizer_pred.apply_gradients(zip(grads_pred, pred.trainable_variables))
-            optimizer_prs.apply_gradients((zip(grads_prs, prs.trainable_variables)))
+            optimizer_pred.apply_gradients(zip(grads_pred, pred_model.trainable_variables))
+            optimizer_prs.apply_gradients((zip(grads_prs, prs_model.trainable_variables)))
             # loss information every batch
             loss_batch.append(loss.numpy())
 
@@ -65,12 +64,12 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
             print(f'run epoch: {epoch} , time consumed: {int(count_time)} s')
 
         # validation loss information every epoch
-        val_acc = validation_acc(pred, prs, val_data, val_label, val_PRS, numerical_phenotype_idx, categorical_phenotype_idx)
+        val_acc = validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerical_phenotype_idx, categorical_phenotype_idx)
 
         if val_acc > val_acc_best:
             val_acc_best = val_acc
-            pred.save_weights(param_save + '/pred_model_param_g_t2d_' + str(alpha) + '_' + str(beta) +'ckpt')
-            prs.save_weights(param_save + '/prs_model_param_g_t2d_' + str(alpha) + '_' + str(beta) +'ckpt')
+            pred_model.save_weights(param_save + '/pred_model_param_g_t2d_' + str(alpha) + '_' + str(beta) +'ckpt')
+            prs_model.save_weights(param_save + '/prs_model_param_g_t2d_' + str(alpha) + '_' + str(beta) +'ckpt')
 
     # for epoch error plot
     np.save(train_loss_save + '/train_loss_t2d_' + str(alpha) + '_' + str(beta), train_loss_epoch)
@@ -81,10 +80,10 @@ def validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerica
                    categorical_phenotype_idx):
     numerical_x = [val_data[:, idx] for idx in numerical_phenotype_idx]
     categorical_x = [val_data[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
-    y_true = tf.one_hot(indices=val_label, depth=2, dtype=tf.float64)
-    val_result_pre = tf.transpose(pred_model(numerical_x, categorical_x))
+    y_true = tf.one_hot(indices=val_label, depth=2, dtype=tf.float32)
+    val_result_pre = tf.transpose(pred_model((numerical_x, categorical_x)))
     val_result_prs = prs_model(val_PRS)
-    PRSPR_Pred = val_result_pre[: 1] + val_result_prs
+    PRSPR_Pred = val_result_pre[:, 1] + val_result_prs
     pred_result = PRSPR_Pred.numpy()
     threshold = np.mean(pred_result)
     classification = []
@@ -102,8 +101,8 @@ def validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerica
 def evaluation_auc(pred_model, prs_model, data, label, PRS, param_path, numerical_phenotype_idx,
                    categorical_phenotype_idx, alpha_test, beta_test, save_result=False, result_folder=None):
     numerical_x = [data[:, idx] for idx in numerical_phenotype_idx]
-    categorical_x = [label[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
-    y_true = tf.one_hot(indices=label, depth=2, dtype=tf.float64)
+    categorical_x = [data[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
+    y_true = tf.one_hot(indices=label, depth=2, dtype=tf.float32)
 
     pred_model_trained_param = param_path + '/pred_model_param_g_t2d_' + str(alpha_test) + '_' + str(beta_test) +'ckpt'
     prs_model_trained_param = param_path + '/prs_model_param_g_t2d_' + str(alpha_test) + '_' + str(beta_test) + 'ckpt'
@@ -111,11 +110,11 @@ def evaluation_auc(pred_model, prs_model, data, label, PRS, param_path, numerica
     pred_model.load_weights(pred_model_trained_param)
     prs_model.load_weights(prs_model_trained_param)
 
-    result_pre = tf.transpose(pred_model(numerical_x, categorical_x))
+    result_pre = tf.transpose(pred_model((numerical_x, categorical_x)))
     result_prs = prs_model(PRS)
-    PRSPR_Pred = result_pre[: 1] + result_prs
+    PRSPR_Pred = result_pre[:, 1] + result_prs
     result_list = PRSPR_Pred.numpy()
-    label_list = label.numpy()
+    label_list = label
 
     if save_result:
         np.save(result_folder + '/y_test', label)
@@ -137,12 +136,16 @@ if __name__ == '__main__':
     seed = 9999
     tf.random.set_seed(seed)
     np.random.seed(seed)
-    # PRS score loading
+    # PRS score & Label loading
+    prs_file = '../../data/model_training_data/cad/training_prs.txt'
+    prs_data = np.genfromtxt(prs_file)
+    label_data = np.int32(prs_data[:, 1])
+    prs_data = prs_data[:, 0]
 
     # phenotype data loading
-    d_file = '../../data/features_selection/features_selection_data_dummy_data.txt'
-    d_info_file = '../../data/features_selection/features_selection_data_dummy_info.csv'
-    data = np.genfromtxt(d_file)
+    d_file = '../../data/model_training_data/training_data.npy'
+    d_info_file = '../../data/model_training_data/training_data_info.csv'
+    data = np.load(d_file)
     data = data.T
     data_info = pd.read_csv(d_info_file, header=None, names=['Type', 'id', 'Description'])
     num_phenotype = len(set([i[0] for i in np.char.split(data_info['id'].to_numpy(dtype=str), '_')]))
@@ -165,10 +168,13 @@ if __name__ == '__main__':
             categorical_phenotype_idx.append((idx, k))
             idx = k
     n_categorical_phenotype_feature = [idx_e - idx_s for (idx_s, idx_e) in categorical_phenotype_idx]
-    # Label loading
 
+    data = np.random.normal(0, 1, size=[1494, 85])
+    print(data.shape)
+    print(label_data.shape)
+    print(prs_data.shape)
     # Train & Test data splitting
-    x_train, x_test = train_test_split(data, test_size=0.25, random_state=seed, shuffle=True)
+    x_train, x_test, y_train, y_test, prs_train, prs_test = train_test_split(data, label_data, prs_data, test_size=0.25, random_state=seed, shuffle=True)
     print('Data loading succeed')
 
     mode = input('train or evaluation mode?\t')
@@ -178,7 +184,7 @@ if __name__ == '__main__':
     if result is not None:
         if not os.path.isdir(result):
             os.mkdir(result)
-    result_folder = work_path + '/result/t2d_200epoch_monitor_acc'
+    result_folder = work_path + '/result/cad_200epoch_monitor_acc'
     if result_folder is not None:
         if not os.path.isdir(result_folder):
             os.mkdir(result_folder)
@@ -197,21 +203,23 @@ if __name__ == '__main__':
 
     error_input = False
 
-    if mode == ' train':
+    if mode == 'train':
         auc_txt = open(result_folder + '/auc_collected.txt', 'w')
         auc_txt.write('alpha\tbeta\tAUROC\n')
         for i in range(len(alpha_candi)):
             for j in range(len(beta_candi)):
                 # train model
-                model_train(numerical_phenotype_idx=numerical_phenotype_idx,
-                            categorical_phenotype_idx=categorical_phenotype_idx, num_phenotype=num_phenotype,
+                model_train(data=x_train, label=y_train, PRS=prs_train, numerical_phenotype_idx=numerical_phenotype_idx,
+                            categorical_phenotype_idx=categorical_phenotype_idx, val_data=x_test,
+                            val_label=y_test, val_PRS=prs_test, num_phenotype=num_phenotype,
                             param_save=param_path, train_loss_save=train_loss_path, val_loss_save=val_loss_path,
                             alpha=alpha_candi[i], beta=beta_candi[j], n_epoch=200)
                 # test after training
                 eval_pred_model = myModel(num_phenotype, n_categorical_phenotype_feature)
                 eval_prs_model = PRS_model()
                 auc_test = evaluation_auc(pred_model=eval_pred_model, prs_model=eval_prs_model,
-                                          param_path=param_path, numerical_phenotype_idx=numerical_phenotype_idx,
+                                          data=x_test, label=y_test, PRS=prs_test, param_path=param_path,
+                                          numerical_phenotype_idx=numerical_phenotype_idx,
                                           categorical_phenotype_idx=categorical_phenotype_idx, alpha_test=alpha_candi[i],
                                           beta_test=beta_candi[j], save_result=False, result_folder=result_folder)
                 print('test auc:', auc_test)
@@ -242,7 +250,8 @@ if __name__ == '__main__':
             eval_pred_model = myModel(num_phenotype, n_categorical_phenotype_feature)
             eval_prs_model = PRS_model()
             auc_test = evaluation_auc(pred_model=eval_pred_model, prs_model=eval_prs_model,
-                                      param_path=param_path, numerical_phenotype_idx=numerical_phenotype_idx,
+                                      data=x_test, label=y_test, PRS=prs_test, param_path=param_path,
+                                      numerical_phenotype_idx=numerical_phenotype_idx,
                                       categorical_phenotype_idx=categorical_phenotype_idx, alpha_test=alpha_input,
                                       beta_test=beta_input, save_result=sava_evaluation, result_folder=result_folder)
             print('test auc:', auc_test)
