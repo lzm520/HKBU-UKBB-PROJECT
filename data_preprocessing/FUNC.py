@@ -19,7 +19,10 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     field_20001_path = '../../data/field_extraction/field_20001.csv'
     field_20002_path = '../../data/field_extraction/field_20002.csv'
     save_path = '../../data/eid_filter/eid_filter.csv'
+    training_eid_path = '../../data/eid_filter/eid_training.csv'
+    evaluation_eid_path = '../../data/eid_filter/eid_evaluation.csv'
 
+    time_threshold = 20150101.0
     # CAD
     # icd10_list = [r'I20.*', r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
     # icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
@@ -30,6 +33,10 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     # Extract patients from clinical records
     hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
+    training_data = hes_diag_data[hes_diag_data['disdate'] <= time_threshold]
+    training_data = {x: y for x, y in zip(training_data['ukb_index'], training_data['eid'])}
+    evaluation_data = hes_diag_data[hes_diag_data['disdate'] > time_threshold]
+    evaluation_data = {x: y for x, y in zip(evaluation_data['ukb_index'], evaluation_data['eid'])}
 
     self_report_cancer_list = []
     self_report_non_cancer_list = [r'1248']
@@ -56,6 +63,9 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
             for cancer_id in self_report_cancer_list:
                 if re.search(cancer_id, cancer):
                     data[idx] = ukb_self_report_cancer.loc[idx, 'eid']
+                    training_data[idx] = ukb_self_report_cancer.loc[idx, 'eid']
+                    if evaluation_data.get(idx) is not None:
+                        evaluation_data.pop(idx)
                     break
 
     # Extract patients from self-report records (Field 20002)
@@ -80,8 +90,13 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
             for cancer_id in self_report_non_cancer_list:
                 if re.search(cancer_id, non_cancer):
                     data[idx] = ukb_self_report_non_cancer.loc[idx, 'eid']
+                    training_data[idx] = ukb_self_report_non_cancer.loc[idx, 'eid']
+                    if evaluation_data.get(idx) is not None:
+                        evaluation_data.pop(idx)
                     break
     df = pd.DataFrame({'ukb_index': list(data.keys()), 'eid': list(data.values())})
+    training_df = pd.DataFrame({'ukb_index': list(training_data.keys()), 'eid': list(training_data.values())})
+    evaluation_df = pd.DataFrame({'ukb_index': list(evaluation_data.keys()), 'eid': list(evaluation_data.values())})
 
     # Save file
     if not os.path.exists(os.path.dirname(save_path)):
@@ -93,6 +108,26 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
             if np.mod(i, 500) == 0:
                 print('Iterated save patients:', i)
             writer.writerow(df.iloc[i])
+
+    if not os.path.exists(os.path.dirname(training_eid_path)):
+        os.makedirs(os.path.dirname(training_eid_path))
+    with open(training_eid_path, 'w', newline='') as fp:
+        writer = csv.writer(fp)
+        writer.writerow(['ukb_index', 'eid'])
+        for i in range(training_df.shape[0]):
+            if np.mod(i, 500) == 0:
+                print('Iterated save training patients:', i)
+            writer.writerow(training_df.iloc[i])
+
+    if not os.path.exists(os.path.dirname(evaluation_eid_path)):
+        os.makedirs(os.path.dirname(evaluation_eid_path))
+    with open(evaluation_eid_path, 'w', newline='') as fp:
+        writer = csv.writer(fp)
+        writer.writerow(['ukb_index', 'eid'])
+        for i in range(evaluation_df.shape[0]):
+            if np.mod(i, 500) == 0:
+                print('Iterated save evaluation patients:', i)
+            writer.writerow(evaluation_df.iloc[i])
 
     if not os.path.exists(field_20001_path):
         with open(field_20001_path, 'w', newline='') as fp:
