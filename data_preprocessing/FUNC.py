@@ -33,7 +33,7 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     # Extract patients from clinical records
     hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
-    training_data = hes_diag_data[hes_diag_data['disdate'] <= time_threshold]
+    training_data = hes_diag_data.loc[(hes_diag_data['disdate'] <= time_threshold) | (hes_diag_data['disdate'] is None)]
     training_data = {x: y for x, y in zip(training_data['ukb_index'], training_data['eid'])}
     evaluation_data = hes_diag_data[hes_diag_data['disdate'] > time_threshold]
     evaluation_data = {x: y for x, y in zip(evaluation_data['ukb_index'], evaluation_data['eid'])}
@@ -44,16 +44,8 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     # Extract patients from self-report records (Field 20001)
     if len(self_report_cancer_list) > 0 and self_report_cancer_list[0] != '':
         if os.path.exists(field_20001_path):
-            dat = []
-            with open(field_20001_path, 'r') as fp:
-                reader = csv.reader(fp)
-                for i, row in enumerate(reader):
-                    if i == 0:
-                        continue
-                    if np.mod(i, 50000) == 0:
-                        print('Iterated entries 20001:', i)
-                    dat.append(row)
-            ukb_self_report_cancer = pd.DataFrame(dat, columns=['eid', '20001'])
+            ukb_self_report_cancer = pd.read_csv(field_20001_path)
+            ukb_self_report_cancer = ukb_self_report_cancer.fillna('')
         else:
             ukb_self_report_cancer = Field_extract_for_self_report('20001')
             ukb_self_report_cancer = pd.DataFrame(ukb_self_report_cancer)
@@ -71,16 +63,8 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     # Extract patients from self-report records (Field 20002)
     if len(self_report_non_cancer_list) > 0 and self_report_non_cancer_list[0] != '':
         if os.path.exists(field_20002_path):
-            dat = []
-            with open(field_20002_path, 'r') as fp:
-                reader = csv.reader(fp)
-                for i, row in enumerate(reader):
-                    if i == 0:
-                        continue
-                    if np.mod(i, 50000) == 0:
-                        print('Iterated entries 20002:', i)
-                    dat.append(row)
-            ukb_self_report_non_cancer = pd.DataFrame(dat, columns=['eid', '20002'])
+            ukb_self_report_non_cancer = pd.read_csv(field_20002_path)
+            ukb_self_report_non_cancer = ukb_self_report_non_cancer.fillna('')
         else:
             ukb_self_report_non_cancer = Field_extract_for_self_report('20002')
             ukb_self_report_non_cancer = pd.DataFrame(ukb_self_report_non_cancer)
@@ -387,10 +371,16 @@ def access_model_training_data():
     feature_data_path = '../../data/features_selection/features_selection_data_dummy_data.txt'
     feature_info_path = '../../data/features_selection/features_selection_data_dummy_info.csv'
     eids_path = '../../data/field_extraction/eids.csv'
+    training_eids_path = '../../data/eid_filter/eid_training.csv'
+    evaluation_eids_path = '../../data/eid_filter/eid_evaluation.csv'
     mr_data_path = '../../data/MR_analysis/ivw_ebi.csv'
+    prs_data_path = '../../data/model_training_data/t2d/prs.txt'
     training_data_fam_path = '../../data/testing_data.fam'
-    training_data_save_path = '../../data/model_training_data/training_data_info.csv'
-    training_data_info_save_path = '../../data/model_training_data/training_data.npy'
+    training_data_info_save_path = '../../data/model_training_data/training_data_info.csv'
+    training_data_save_path = '../../data/model_training_data/training_data.npy'
+    evaluation_data_save_path = '../../data/model_training_data/evaluation_data.npy'
+    training_prs_save_path = '../../data/model_training_data/training_prs.npy'
+    evaluation_prs_save_path = '../../data/model_training_data/evaluation_prs.npy'
 
     # features data loading
     feature_data = np.genfromtxt(feature_data_path)
@@ -401,31 +391,67 @@ def access_model_training_data():
 
     # mr data loading
     ivw_data = pd.read_csv(mr_data_path)
-    sig_phenotype_list = ivw_data[ivw_data['pval'] < 0.05].reset_index()['exposure'].to_list()
+    sig_phenotype_list = ivw_data[ivw_data['qval'] < 0.05].reset_index()['exposure'].to_list()
     sig_phenotype = []
     for pheno in sig_phenotype_list:
         sig_phenotype.append(str.split(pheno, "||")[0].strip())
 
-    # training data processing
+    # PRS data loading
+    prs_data = np.genfromtxt(prs_data_path)
+
+    # Training data processing
+    # reading training & evaluation eid
+    training_eids_df = pd.read_csv(training_eids_path)
+    training_eids = training_eids_df['eid'].values
+    evaluation_eids_df = pd.read_csv(evaluation_eids_path)
+    evaluation_eids = evaluation_eids_df['eid'].values
+
     fam_train = pd.read_table(training_data_fam_path, header=None)
-    eids_train = fam_train[0].to_numpy()
-    eids_train_list = []
-    for eid in eids_train:
-        eids_train_list.append(np.where(eids == eid)[0][0])
-    feature_data_train = feature_data[:, eids_train_list]
-    data_train = []
-    info_train = []
+    all_eids = fam_train[0].to_numpy()
+    eids_training_list = []
+    eids_evaluation_list = []
+    prs_training_list = []
+    prs_evaluation_list = []
+    for i, eid in enumerate(all_eids):
+        if eid in training_eids:
+            eids_training_list.append(training_eids_df[training_eids_df['eid'] == eid]['ukb_index'].values[0])
+            prs_training_list.append(prs_data[i])
+        elif eid in evaluation_eids:
+            eids_evaluation_list.append(evaluation_eids_df[evaluation_eids_df['eid'] == eid]['ukb_index'].values[0])
+            prs_evaluation_list.append(prs_data[i])
+    for i, eid in enumerate(all_eids):
+        training_size = len(eids_training_list) * 2
+        evaluation_size = len(eids_evaluation_list) * 2
+        if eid not in training_eids and eid not in evaluation_eids and eid in eids:
+            if len(eids_training_list) < training_size:
+                eids_training_list.append(np.where(eids == eid)[0][0])
+                prs_training_list.append(prs_data[i])
+            elif len(eids_evaluation_list) < evaluation_size:
+                eids_evaluation_list.append(np.where(eids == eid)[0][0])
+                prs_evaluation_list.append(prs_data[i])
+            else:
+                break
+    feature_data_training = feature_data[:, eids_training_list]
+    feature_data_evaluation = feature_data[:, eids_evaluation_list]
+
+    data_training = []
+    data_evaluation = []
+    data_info = []
     for i in range(feature_info.shape[0]):
         description = feature_info.loc[i, 'Description']
         if description in sig_phenotype:
-            data_train.append(feature_data_train[i])
-            info_train.append(feature_info.loc[i].to_numpy())
+            data_training.append(feature_data_training[i])
+            data_evaluation.append(feature_data_evaluation[i])
+            data_info.append(feature_info.loc[i].to_numpy())
     # training data saving
-    with open(training_data_save_path, 'w', newline='') as fp:
+    with open(training_data_info_save_path, 'w', newline='') as fp:
         writer = csv.writer(fp)
-        for info in info_train:
+        for info in data_info:
             writer.writerow(info)
-    np.save(training_data_info_save_path, data_train)
+    np.save(training_data_save_path, data_training)
+    np.save(evaluation_data_save_path, data_evaluation)
+    np.save(training_prs_save_path, prs_training_list)
+    np.save(evaluation_prs_save_path, prs_evaluation_list)
 
 
 class MyModel(keras.Model):
