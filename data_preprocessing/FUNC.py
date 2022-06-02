@@ -18,28 +18,57 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     global ukb_self_report_cancer, ukb_self_report_non_cancer
     field_20001_path = '../../data/field_extraction/field_20001.csv'
     field_20002_path = '../../data/field_extraction/field_20002.csv'
+    field_birth_path = '../../data/field_extraction/field_34.npy'
+    field_age_at_recruitment_path = '../../data/field_extraction/field_21022.npy'
     save_path = '../../data/eid_filter/eid_filter.csv'
     training_eid_path = '../../data/eid_filter/eid_training.csv'
     evaluation_eid_path = '../../data/eid_filter/eid_evaluation.csv'
 
     time_threshold = 20150101.0
     # CAD
-    # icd10_list = [r'I20.*', r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
+    # icd10_list = [r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
     # icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
 
     # Type2 Diabetes
     icd10_list = [r'E11*']
     icd9_list = []
+
+    # Hypertension
+    # icd10_list = [r'I10*', r'O13*']
+    # icd9_list = []
+
     # Extract patients from clinical records
     hes_diag_data = HES_diagnosis(icd9_list, icd10_list)
     data = {x: y for x, y in zip(hes_diag_data['ukb_index'], hes_diag_data['eid'])}
-    training_data = hes_diag_data.loc[(hes_diag_data['disdate'] <= time_threshold) | (hes_diag_data['disdate'] is None)]
-    training_data = {x: y for x, y in zip(training_data['ukb_index'], training_data['eid'])}
-    evaluation_data = hes_diag_data[hes_diag_data['disdate'] > time_threshold]
-    evaluation_data = {x: y for x, y in zip(evaluation_data['ukb_index'], evaluation_data['eid'])}
+
+    # user birth year loading
+    birth = np.load(field_birth_path)
+
+    # user recruitment age loading
+    recruitment_age = np.load(field_age_at_recruitment_path)
+
+    training_data = {}
+    evaluation_data = {}
+    for i in range(hes_diag_data.shape[0]):
+        if np.isnan(hes_diag_data.loc[i, 'disdate']) or (hes_diag_data.loc[i, 'disdate'] - float(birth[hes_diag_data.loc[i, 'ukb_index']])) < float(recruitment_age[hes_diag_data.loc[i, 'ukb_index']]):
+            training_data[hes_diag_data.loc[i, 'ukb_index']] = hes_diag_data.loc[i, 'eid']
+        else:
+            evaluation_data[hes_diag_data.loc[i, 'ukb_index']] = hes_diag_data.loc[i, 'eid']
+    # training_data = hes_diag_data.loc[(hes_diag_data['disdate'] <= time_threshold) | (hes_diag_data['disdate'] is None)]
+    # training_data = {x: y for x, y in zip(training_data['ukb_index'], training_data['eid'])}
+    # evaluation_data = hes_diag_data[hes_diag_data['disdate'] > time_threshold]
+    # evaluation_data = {x: y for x, y in zip(evaluation_data['ukb_index'], evaluation_data['eid'])}
 
     self_report_cancer_list = []
-    self_report_non_cancer_list = [r'1248']
+
+    # CAD
+    self_report_non_cancer_list = [r'1092']
+
+    # Type2 Diabetes
+    # self_report_non_cancer_list = [r'1248']
+
+    # Hypertension
+    # self_report_non_cancer_list = [r'1072', r'1073']
 
     # Extract patients from self-report records (Field 20001)
     if len(self_report_cancer_list) > 0 and self_report_cancer_list[0] != '':
@@ -370,6 +399,7 @@ def category_features_transform():
 def access_model_training_data():
     feature_data_path = '../../data/features_selection/features_selection_data_dummy_data.txt'
     feature_info_path = '../../data/features_selection/features_selection_data_dummy_info.csv'
+    field_age_at_recruitment_path = '../../data/field_extraction/field_21022.npy'
     eids_path = '../../data/field_extraction/eids.csv'
     training_eids_path = '../../data/eid_filter/eid_training.csv'
     evaluation_eids_path = '../../data/eid_filter/eid_evaluation.csv'
@@ -385,9 +415,18 @@ def access_model_training_data():
     # features data loading
     feature_data = np.genfromtxt(feature_data_path)
     feature_info = pd.read_csv(feature_info_path, header=None,
-                               names=['Type', 'id', 'Description'])
+                               names=['Type', 'id', 'Description']).tolist()
+    list.insert(feature_info, 0, ['Integer', 34, 'Age at recruitment'])
+    feature_info = pd.DataFrame(feature_info, columns=['Type', 'id', 'Description'])
+
     # eids loading
     eids = pd.read_csv(eids_path)['eid'].to_numpy()
+
+    # recruitment age loading
+    recruitment_age = np.load(field_age_at_recruitment_path)
+    feature_data = feature_data.tolist()
+    list.insert(feature_data, 0, recruitment_age)
+    feature_data = np.array(feature_data)
 
     # mr data loading
     ivw_data = pd.read_csv(mr_data_path)
@@ -438,6 +477,12 @@ def access_model_training_data():
     data_evaluation = []
     data_info = []
     for i in range(feature_info.shape[0]):
+        if i == 0:
+            # adding the age infomation into the model_training data
+            data_training.append(feature_data_training[i])
+            data_evaluation.append(feature_data_evaluation[i])
+            data_info.append(feature_info.loc[i].to_numpy())
+
         description = feature_info.loc[i, 'Description']
         if description in sig_phenotype:
             data_training.append(feature_data_training[i])

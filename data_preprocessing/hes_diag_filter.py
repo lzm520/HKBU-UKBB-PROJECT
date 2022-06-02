@@ -32,7 +32,6 @@ def HES_diagnosis(icd9_list, icd10_list):
             index = np.where(ind_eid == np.int32(eid))[0]
         else:
             continue
-        disdate = hes_info[(hes_info['eid'] == int(float(eid))) & (hes_info['ins_index'] == int(float(ins_index)))]['disdate'].to_list()[0]
 
         if len(index) == 0:
             continue
@@ -43,6 +42,9 @@ def HES_diagnosis(icd9_list, icd10_list):
             for icd10 in icd10_list:
                 if re.match(icd10, ICD10):
                     if not hes_diag.get(index):
+                        disdate = hes_info[(hes_info['eid'] == int(float(eid))) & (hes_info['ins_index'] == int(float(ins_index)))]['disdate'].to_list()[0]
+                        if not pd.isna(disdate):
+                            disdate = float(str(disdate)[:4])
                         hes_diag[index] = {'ukb_index': index, 'eid': eid, 'disdate': disdate}
                         break
             for icd9 in icd9_list:
