@@ -231,11 +231,11 @@ if __name__ == '__main__':
     training_data = np.load(training_data_path).astype(np.float32)
     evaluation_data = np.load(evaluation_data_path).astype(np.float32)
     if is_age:
-        training_data = training_data[1:, :].T
-        evaluation_data   = evaluation_data[1:, :].T
-    else:
         training_data = training_data.T
         evaluation_data = evaluation_data.T
+    else:
+        training_data = training_data[1:, :].T
+        evaluation_data = evaluation_data[1:, :].T
     training_data, evaluation_data = torch.tensor(training_data), torch.tensor(evaluation_data)
 
     # feature info loading
@@ -271,9 +271,9 @@ if __name__ == '__main__':
         if not os.path.isdir(result):
             os.mkdir(result)
     if is_age:
-        result_folder = result + f'f/{disease_name}_200epoch_monitor_acc (age)'
+        result_folder = result + f'f/{disease_name}_200epoch_monitor_acc-age'
     else:
-        result_folder = result + f'f/{disease_name}_200epoch_monitor_acc (no age)'
+        result_folder = result + f'f/{disease_name}_200epoch_monitor_acc-no_age'
     if result_folder is not None:
         if not os.path.isdir(result_folder):
             os.mkdir(result_folder)
