@@ -14,7 +14,7 @@ class myModel(nn.Module):
         super().__init__()
         # weight for feature
         self.W = nn.Parameter(torch.FloatTensor(torch.randn(2, n_feature)))
-
+        self.B1 = nn.Parameter(torch.FloatTensor(torch.randn(2, n_phenotype)))
         # confidence matrix for every features
         self.M = nn.Parameter(torch.FloatTensor(torch.randn(2, n_phenotype)))
 
@@ -25,7 +25,7 @@ class myModel(nn.Module):
         k = 0
         j = 0
         for x in numerical_x:
-            out = self.W[:, [k]] @ x.mT
+            out = self.W[:, [k]] @ x.mT + self.B1[:, [j]]
             out = torch.tanh(out)
             out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
             outputs.append(out)
@@ -34,7 +34,7 @@ class myModel(nn.Module):
         # processing categorical data
         for x in categorical_x:
             n = x.shape[1]
-            out = self.W[:, k:k+n] @ x.mT
+            out = self.W[:, k:k+n] @ x.mT + self.B1[:, [j]]
             out = torch.tanh(out)
             out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
             outputs.append(out)
@@ -74,7 +74,7 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
     optimizer_prs = torch.optim.Adadelta(prs_model.parameters(), rho=0.95, weight_decay=0.001)
 
     bce_loss = nn.BCELoss()
-    kl_loss = nn.KLDivLoss()
+    kl_loss = nn.KLDivLoss(reduction='batchmean')
 
     dataset = TensorDataset(data, label, PRS)
     db = DataLoader(dataset, batch_size=batch_size, shuffle=True)
