@@ -19,7 +19,7 @@ class myModel(nn.Module):
         self.M = nn.Parameter(torch.FloatTensor(torch.randn(2, n_phenotype)))
 
     def forward(self, inputs):
-        numerical_x, categorical_x = inputs
+        numerical_x, categorical_x, icd_x = inputs
         outputs = []
         # processing numerical data
         k = 0
@@ -39,6 +39,14 @@ class myModel(nn.Module):
             out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
             outputs.append(out)
             k += n
+            j += 1
+        # processing icd data
+        for x in icd_x:
+            out = self.W[:, [k]] @ x.mT + self.B1[:, [j]]
+            out = torch.tanh(out)
+            out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
+            outputs.append(out)
+            k += 1
             j += 1
 
         f = torch.zeros_like(outputs[0])
@@ -63,14 +71,14 @@ class PRS_model(nn.Module):
         return logit
 
 
-def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype_idx, val_data, val_label, val_PRS,
+def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype_idx, n_icd, val_data, val_label, val_PRS,
                 num_phenotype, num_feature, param_save, train_loss_save, val_loss_save, alpha=1., beta=1., batch_size=100,
-                n_epoch=1000):
+                n_epoch=1000, device='cpu'):
     # model instance
-    pred_model = myModel(num_phenotype, num_feature)
+    pred_model = myModel(num_phenotype, num_feature).to(device)
     optimizer_pred = torch.optim.Adadelta(pred_model.parameters(), rho=0.95, weight_decay=0.001)
 
-    prs_model = PRS_model()
+    prs_model = PRS_model().to(device)
     optimizer_prs = torch.optim.Adadelta(prs_model.parameters(), rho=0.95, weight_decay=0.001)
 
     bce_loss = nn.BCELoss()
@@ -89,13 +97,16 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
         prs_model.train()
         loss_batch = []
         for step, (x, y, prs) in enumerate(db):
-            numerical_x = [x[:, [idx]] for idx in numerical_phenotype_idx]
-            categorical_x = [x[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
+            y = y.to(device)
+            prs = prs.to(device)
+            numerical_x = [x[:, [idx]].to(device) for idx in numerical_phenotype_idx]
+            categorical_x = [x[:, idx_s:idx_e].to(device) for (idx_s, idx_e) in categorical_phenotype_idx]
+            icd_x = [x[:, [i]].to(device) for i in range(num_feature-n_icd, num_feature)]
 
             optimizer_pred.zero_grad()
             optimizer_prs.zero_grad()
             # prediction
-            result_pred = pred_model((numerical_x, categorical_x)).T
+            result_pred = pred_model((numerical_x, categorical_x, icd_x)).T
             result_prs = prs_model(prs)
             # loss calculation
             kl = kl_loss(result_pred[:, 1], result_prs)
@@ -109,7 +120,7 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
             optimizer_prs.step()
 
             # loss information every batch
-            loss_batch.append(loss.detach().numpy())
+            loss_batch.append(loss.detach().cpu().numpy())
 
         # training loss information every epoch
         train_loss_epoch.append(np.mean(loss_batch))
@@ -119,7 +130,7 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
             print(f'run epoch: {epoch} , time consumed: {int(count_time)}s')
 
         # validation loss information every epoch
-        val_acc = validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerical_phenotype_idx, categorical_phenotype_idx)
+        val_acc = validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerical_phenotype_idx, categorical_phenotype_idx, n_icd, device=device)
 
         if val_acc > val_acc_best:
             val_acc_best = val_acc
@@ -134,13 +145,20 @@ def model_train(data, label, PRS, numerical_phenotype_idx, categorical_phenotype
 
 
 def validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerical_phenotype_idx,
-                   categorical_phenotype_idx):
-    numerical_x = [val_data[:, [idx]] for idx in numerical_phenotype_idx]
-    categorical_x = [val_data[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
+                   categorical_phenotype_idx, n_icd, device='cpu'):
+    pred_model = pred_model.to(device)
+    prs_model = prs_model.to(device)
+
+    val_label = val_label.to(device)
+    val_PRS = val_PRS.to(device)
+    numerical_x = [val_data[:, [idx]].to(device) for idx in numerical_phenotype_idx]
+    categorical_x = [val_data[:, idx_s:idx_e].to(device) for (idx_s, idx_e) in categorical_phenotype_idx]
+    icd_x = [val_data[:, [i]].to(device) for i in range(num_feature - n_icd, num_feature)]
+
     pred_model.eval()
     prs_model.eval()
     with torch.no_grad():
-        val_result_pre = pred_model((numerical_x, categorical_x)).T
+        val_result_pre = pred_model((numerical_x, categorical_x, icd_x)).T
         val_result_prs = prs_model(val_PRS)
         PRSPR_Pred = val_result_pre[:, 1] + val_result_prs
         pred_result = PRSPR_Pred.numpy()
@@ -158,9 +176,15 @@ def validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerica
 
 
 def evaluation_auc(pred_model, prs_model, data, label, PRS, param_path, numerical_phenotype_idx,
-                   categorical_phenotype_idx, alpha_test, beta_test, save_result=False, result_folder=None):
-    numerical_x = [data[:, [idx]] for idx in numerical_phenotype_idx]
-    categorical_x = [data[:, idx_s:idx_e] for (idx_s, idx_e) in categorical_phenotype_idx]
+                   categorical_phenotype_idx, n_icd, alpha_test, beta_test, save_result=False, result_folder=None, device='cpu'):
+    pred_model = pred_model.to(device)
+    prs_model = prs_model.to(device)
+
+    label = label.to(device)
+    PRS = PRS.to(device)
+    numerical_x = [data[:, [idx]].to(device) for idx in numerical_phenotype_idx]
+    categorical_x = [data[:, idx_s:idx_e].to(device) for (idx_s, idx_e) in categorical_phenotype_idx]
+    icd_x = [data[:, [i]].to(device) for i in range(num_feature - n_icd, num_feature)]
 
     trained_param = param_path + '/model_param_g_t2d_' + str(alpha_test) + '_' + str(beta_test) + '.pth'
     reload_states = torch.load(trained_param)
@@ -171,7 +195,7 @@ def evaluation_auc(pred_model, prs_model, data, label, PRS, param_path, numerica
     pred_model.eval()
     prs_model.eval()
     with torch.no_grad():
-        result_pre = pred_model((numerical_x, categorical_x)).T
+        result_pre = pred_model((numerical_x, categorical_x, icd_x)).T
         result_prs = prs_model(PRS)
         PRSPR_Pred = result_pre[:, 1] + result_prs
     result_list = PRSPR_Pred.numpy()
@@ -218,8 +242,16 @@ if __name__ == '__main__':
     training_label_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/training_prs.npy'
     evaluation_data_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_data.npy'
     evaluation_label_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_prs.npy'
+    training_eid_icd9_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/training_eid_icd9.txt'
+    training_eid_icd10_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/training_eid_icd10.txt'
+    evaluation_eid_icd9_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_eid_icd9.txt'
+    evaluation_eid_icd10_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_eid_icd10.txt'
     save_path = f'{work_path}/result/xuyuModel/{disease_name}'
+
     is_age = True
+    is_medical_history = True
+    n_epoch = 300
+    device = 'cuda'
 
     # training and evaluation PRS score & Label loading
     training_prs, training_label = prs_label_data_loading(training_label_path)
@@ -236,6 +268,18 @@ if __name__ == '__main__':
     else:
         training_data = training_data[1:, :].T
         evaluation_data = evaluation_data[1:, :].T
+
+    n_icd = 0
+    if is_medical_history:
+        training_eid_icd9 = np.genfromtxt(training_eid_icd9_save_path)[1:, :].astype(np.float32)
+        training_eid_icd10 = np.genfromtxt(training_eid_icd10_save_path)[1:, :].astype(np.float32)
+        training_data = np.concatenate((training_data, training_eid_icd9, training_eid_icd10), axis=1)
+        evaluation_eid_icd9 = np.genfromtxt(evaluation_eid_icd9_save_path)[1:, :].astype(np.float32)
+        evaluation_eid_icd10 = np.genfromtxt(evaluation_eid_icd10_save_path)[1:, :].astype(np.float32)
+        evaluation_data = np.concatenate((evaluation_data, evaluation_eid_icd9, evaluation_eid_icd10), axis=1)
+        n_icd9 = training_eid_icd9.shape[1]
+        n_icd10 = training_eid_icd10.shape[1]
+        n_icd += n_icd9 + n_icd10
     training_data, evaluation_data = torch.tensor(training_data), torch.tensor(evaluation_data)
 
     # feature info loading
@@ -244,6 +288,10 @@ if __name__ == '__main__':
         data_info = data_info[1:]
     num_feature = data_info.shape[0]
     num_phenotype = len(set([i[0] for i in np.char.split(data_info['id'].to_numpy(dtype=str), '_')]))
+    if is_medical_history:
+        num_feature += n_icd
+        num_phenotype += n_icd
+
     #  categorical phenotype data preprocessing
     numerical_phenotype_idx = []
     categorical_phenotype_idx = []
@@ -271,9 +319,11 @@ if __name__ == '__main__':
         if not os.path.isdir(result):
             os.mkdir(result)
     if is_age:
-        result_folder = result + f'f/{disease_name}_200epoch_monitor_acc-age'
+        result_folder = result + f'/{disease_name}_200epoch_monitor_acc-age'
     else:
-        result_folder = result + f'f/{disease_name}_200epoch_monitor_acc-no_age'
+        result_folder = result + f'/{disease_name}_200epoch_monitor_acc-no_age'
+    if is_medical_history:
+        result_folder = result_folder + '-medical_history'
     if result_folder is not None:
         if not os.path.isdir(result_folder):
             os.mkdir(result_folder)
@@ -301,10 +351,11 @@ if __name__ == '__main__':
                 model_train(data=training_data, label=training_label, PRS=training_prs,
                             numerical_phenotype_idx=numerical_phenotype_idx,
                             categorical_phenotype_idx=categorical_phenotype_idx,
+                            n_icd=n_icd,
                             val_data=evaluation_data, val_label=evaluation_label, val_PRS=evaluation_prs,
                             num_phenotype=num_phenotype, num_feature=num_feature,
                             param_save=param_path, train_loss_save=train_loss_path, val_loss_save=val_loss_path,
-                            alpha=alpha_candi[i], beta=beta_candi[j], n_epoch=200)
+                            alpha=alpha_candi[i], beta=beta_candi[j], n_epoch=n_epoch, device=device)
                 # test after training
                 eval_pred_model = myModel(num_phenotype, num_feature)
                 eval_prs_model = PRS_model()
@@ -312,8 +363,9 @@ if __name__ == '__main__':
                                           data=evaluation_data, label=evaluation_label, PRS=evaluation_prs,
                                           param_path=param_path,
                                           numerical_phenotype_idx=numerical_phenotype_idx,
-                                          categorical_phenotype_idx=categorical_phenotype_idx, alpha_test=alpha_candi[i],
-                                          beta_test=beta_candi[j], save_result=False, result_folder=result_folder)
+                                          categorical_phenotype_idx=categorical_phenotype_idx,
+                                          n_icd=n_icd, alpha_test=alpha_candi[i],
+                                          beta_test=beta_candi[j], save_result=False, result_folder=result_folder, device=device)
                 print('test auc:', auc_test)
                 auc_txt.write(f'{str(alpha_candi[i])}\t{str(beta_candi[j])}\t{str(auc_test)}\n')
         auc_txt.close()
@@ -345,8 +397,9 @@ if __name__ == '__main__':
                                       data=evaluation_data, label=evaluation_label, PRS=evaluation_prs,
                                       param_path=param_path,
                                       numerical_phenotype_idx=numerical_phenotype_idx,
-                                      categorical_phenotype_idx=categorical_phenotype_idx, alpha_test=alpha_input,
-                                      beta_test=beta_input, save_result=sava_evaluation, result_folder=result_folder)
+                                      categorical_phenotype_idx=categorical_phenotype_idx,
+                                      n_icd=n_icd, alpha_test=alpha_input,
+                                      beta_test=beta_input, save_result=sava_evaluation, result_folder=result_folder, device=device)
             print('test auc:', auc_test)
         else:
             print('alpha/beta input error')

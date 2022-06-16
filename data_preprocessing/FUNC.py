@@ -408,9 +408,11 @@ def access_model_training_data():
     training_data_fam_path = '../../data/testing_data.fam'
     training_data_info_save_path = '../../data/model_training_data/training_data_info.csv'
     training_data_save_path = '../../data/model_training_data/training_data.npy'
+    training_eid_save_path = '../../data/model_training_data/training_eid.npy'
     evaluation_data_save_path = '../../data/model_training_data/evaluation_data.npy'
     training_prs_save_path = '../../data/model_training_data/training_prs.npy'
     evaluation_prs_save_path = '../../data/model_training_data/evaluation_prs.npy'
+    evaluation_eid_save_path = '../../data/model_training_data/evaluation_eid.npy'
 
     # features data loading
     feature_data = np.genfromtxt(feature_data_path)
@@ -449,14 +451,18 @@ def access_model_training_data():
     all_eids = fam_train[0].to_numpy()
     eids_training_list = []
     eids_evaluation_list = []
+    training_eids_ls = []
+    evaluation_eids_ls = []
     prs_training_list = []
     prs_evaluation_list = []
     for i, eid in enumerate(all_eids):
         if eid in training_eids:
             eids_training_list.append(training_eids_df[training_eids_df['eid'] == eid]['ukb_index'].values[0])
+            training_eids_ls.append(eid)
             prs_training_list.append(prs_data[i])
         elif eid in evaluation_eids:
             eids_evaluation_list.append(evaluation_eids_df[evaluation_eids_df['eid'] == eid]['ukb_index'].values[0])
+            evaluation_eids_ls.append(eid)
             prs_evaluation_list.append(prs_data[i])
 
     training_size = len(eids_training_list) * 2
@@ -465,9 +471,11 @@ def access_model_training_data():
         if eid not in training_eids and eid not in evaluation_eids and eid in eids:
             if len(eids_training_list) < training_size:
                 eids_training_list.append(np.where(eids == eid)[0][0])
+                training_eids_ls.append(eid)
                 prs_training_list.append(prs_data[i])
             elif len(eids_evaluation_list) < evaluation_size:
                 eids_evaluation_list.append(np.where(eids == eid)[0][0])
+                evaluation_eids_ls.append(eid)
                 prs_evaluation_list.append(prs_data[i])
             else:
                 break
@@ -498,6 +506,139 @@ def access_model_training_data():
     np.save(evaluation_data_save_path, data_evaluation)
     np.save(training_prs_save_path, prs_training_list)
     np.save(evaluation_prs_save_path, prs_evaluation_list)
+    np.save(training_eid_save_path, training_eids_ls)
+    np.save(evaluation_eid_save_path, evaluation_eids_ls)
+
+
+def extract_medical_history():
+    disease_name = 'CAD'
+    hesin_diag_f = '/home/comp/ericluzhang/UKBB/HES/hesin_diag.txt'
+    training_eid_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/training_eid.npy'
+    evaluation_eid_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_eid.npy'
+    fam_path = f'/tmp/local/cszmli/{disease_name}-chr-data/testing_data/testing_data.fam'
+    training_eid_icd9_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/training_eid_icd9.txt'
+    training_eid_icd10_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/training_eid_icd10.txt'
+    evaluation_eid_icd9_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_eid_icd9.txt'
+    evaluation_eid_icd10_save_path = f'/tmp/local/cszmli/data/{disease_name}/model_training_data/evaluation_eid_icd10.txt'
+
+    # load training_eid & evaluation_eid
+    training_eids = np.load(training_eid_save_path).astype(np.str_).tolist()
+    evaluation_eids = np.load(evaluation_eid_save_path).astype(np.str_).tolist()
+
+    # CAD
+    search_icd10_list = [r'I21.*', r'I22.*', r'I23.*', r'I241', r'I252']
+    search_icd9_list = [r'410.*', r'4110.*', r'412.*', r'42979']
+
+    # load eid from fam
+    eid_training = pd.read_table(fam_path, header=None, sep='\t')[0]
+    eid_training = eid_training.values.astype(np.str_)
+
+    # extract hesin_diag, list total icd9/10 and get the top 3 characteristic
+    eid_diag = {}
+    for eid in eid_training:
+        if not eid_diag.get(eid):
+            eid_diag[eid] = {'icd9': [], 'icd10': []}
+    icd9_set = set()
+    icd10_set = set()
+    with open(hesin_diag_f, 'r') as fp:
+        for i, line in enumerate(fp):
+            A = line.strip('\n').split('\t')
+            # print(A)
+            if i == 0:
+                continue
+            eid = A[0]
+            ins_index = A[1]
+            level = A[3]
+            ICD9 = A[4]
+            ICD10 = A[6]
+            if level == '1':
+                if eid in eid_training:
+                    if ICD9 != '':
+                        eid_diag[eid]['icd9'].append((ICD9, ins_index))
+                    if ICD10 != '':
+                        eid_diag[eid]['icd10'].append((ICD10, ins_index))
+                if ICD9 != '':
+                    icd9_set.add(ICD9[:3])
+                if ICD10 != '':
+                    icd10_set.add(ICD10[:3])
+            if np.mod(i, 10000) == 0:
+                print('Iterated entries hes_diag_filter:', i)
+    icd9_list = list(icd9_set)
+    icd10_list = list(icd10_set)
+
+    # create one-hot matrix
+    icd10_df = pd.DataFrame(columns=['eid'] + icd10_list)
+    icd10_df['eid'] = eid_training
+    icd10_df = icd10_df.fillna(0)
+    icd9_df = pd.DataFrame(columns=['eid'] + icd9_list)
+    icd9_df['eid'] = eid_training
+    icd9_df = icd9_df.fillna(0)
+
+    print('Now processing one-hot matrix')
+    for eid in eid_training:
+        t = 999
+        eid_icd9 = eid_diag[eid]['icd9']
+        eid_icd10 = eid_diag[eid]['icd10']
+        for (dis, idx) in eid_icd9:
+            idx = int(idx)
+            for icd9 in search_icd9_list:
+                if re.match(icd9, dis):
+                    if idx < t:
+                        t = idx
+        for (dis, idx) in eid_icd10:
+            idx = int(idx)
+            for icd10 in search_icd10_list:
+                if re.match(icd10, dis):
+                    if idx < t:
+                        t = idx
+        for (dis, idx) in eid_icd9:
+            idx = int(idx)
+            if idx < t:
+                icd9_df.loc[icd9_df['eid'] == eid, dis[:3]] = 1
+        for (dis, idx) in eid_icd10:
+            idx = int(idx)
+            if idx < t:
+                icd10_df.loc[icd10_df['eid'] == eid, dis[:3]] = 1
+
+    training_eid_icd9_df = icd9_df[icd9_df['eid'].isin(training_eids)]
+    training_eid_icd9_df['eid'] = training_eid_icd9_df['eid'].astype('category')
+    training_eid_icd9_df['eid'].cat.set_categories(training_eids, inplace=True)
+    training_eid_icd9_df.sort_values('eid', ascending=True, inplace=True)
+
+    evaluation_eid_icd9_df = icd9_df[icd9_df['eid'].isin(evaluation_eids)]
+    evaluation_eid_icd9_df['eid'] = evaluation_eid_icd9_df['eid'].astype('category')
+    evaluation_eid_icd9_df['eid'].cat.set_categories(evaluation_eids, inplace=True)
+    evaluation_eid_icd9_df.sort_values('eid', ascending=True, inplace=True)
+
+    training_eid_icd10_df = icd10_df[icd10_df['eid'].isin(training_eids)]
+    training_eid_icd10_df['eid'] = training_eid_icd10_df['eid'].astype('category')
+    training_eid_icd10_df['eid'].cat.set_categories(training_eids, inplace=True)
+    training_eid_icd10_df.sort_values('eid', ascending=True, inplace=True)
+
+    evaluation_eid_icd10_df = icd10_df[icd10_df['eid'].isin(evaluation_eids)]
+    evaluation_eid_icd10_df['eid'] = evaluation_eid_icd10_df['eid'].astype('category')
+    evaluation_eid_icd10_df['eid'].cat.set_categories(evaluation_eids, inplace=True)
+    evaluation_eid_icd10_df.sort_values('eid', ascending=True, inplace=True)
+
+    with open(training_eid_icd9_save_path, 'w') as fp:
+        fp.write('\t'.join(icd9_list) + '\n')
+        for i in range(training_eid_icd9_df.shape[0]):
+            fp.write('\t'.join(training_eid_icd9_df.iloc[i, 1:].values.astype(np.str_)) + '\n')
+
+    with open(evaluation_eid_icd9_save_path, 'w') as fp:
+        fp.write('\t'.join(icd9_list) + '\n')
+        for i in range(evaluation_eid_icd9_df.shape[0]):
+            fp.write('\t'.join(evaluation_eid_icd9_df.iloc[i, 1:].values.astype(np.str_)) + '\n')
+
+    with open(training_eid_icd10_save_path, 'w') as fp:
+        fp.write('\t'.join(icd10_list) + '\n')
+        for i in range(training_eid_icd10_df.shape[0]):
+            fp.write('\t'.join(training_eid_icd10_df.iloc[i, 1:].values.astype(np.str_)) + '\n')
+
+    with open(evaluation_eid_icd10_save_path, 'w') as fp:
+        fp.write('\t'.join(icd10_list) + '\n')
+        for i in range(evaluation_eid_icd10_df.shape[0]):
+            fp.write('\t'.join(evaluation_eid_icd10_df.iloc[i, 1:].values.astype(np.str_)) + '\n')
 
 
 if __name__ == '__main__':
