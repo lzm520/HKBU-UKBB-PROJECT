@@ -14,7 +14,6 @@ class myModel(nn.Module):
         super().__init__()
         # weight for feature
         self.W = nn.Parameter(torch.FloatTensor(torch.randn(2, n_feature)))
-        self.B1 = nn.Parameter(torch.FloatTensor(torch.randn(2, n_phenotype)))
         # confidence matrix for every features
         self.M = nn.Parameter(torch.FloatTensor(torch.randn(2, n_phenotype)))
 
@@ -25,7 +24,7 @@ class myModel(nn.Module):
         k = 0
         j = 0
         for x in numerical_x:
-            out = self.W[:, [k]] @ x.mT + self.B1[:, [j]]
+            out = self.W[:, [k]] @ x.mT
             out = torch.tanh(out)
             out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
             outputs.append(out)
@@ -34,7 +33,7 @@ class myModel(nn.Module):
         # processing categorical data
         for x in categorical_x:
             n = x.shape[1]
-            out = self.W[:, k:k+n] @ x.mT + self.B1[:, [j]]
+            out = self.W[:, k:k+n] @ x.mT
             out = torch.tanh(out)
             out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
             outputs.append(out)
@@ -42,7 +41,7 @@ class myModel(nn.Module):
             j += 1
         # processing icd data
         for x in icd_x:
-            out = self.W[:, [k]] @ x.mT + self.B1[:, [j]]
+            out = self.W[:, [k]] @ x.mT
             out = torch.tanh(out)
             out = torch.reshape(self.M[:, j], shape=[2, 1]) * out
             outputs.append(out)
@@ -161,7 +160,7 @@ def validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerica
         val_result_pre = pred_model((numerical_x, categorical_x, icd_x)).T
         val_result_prs = prs_model(val_PRS)
         PRSPR_Pred = val_result_pre[:, 1] + val_result_prs
-        pred_result = PRSPR_Pred.numpy()
+        pred_result = PRSPR_Pred.cpu().numpy()
         threshold = np.mean(pred_result)
     classification = []
     for i in range(len(val_label)):
@@ -169,7 +168,7 @@ def validation_acc(pred_model, prs_model, val_data, val_label, val_PRS, numerica
             classification.append(1)
         else:
             classification.append(0)
-    val_acc = np.sum(np.array(classification) == val_label.numpy())
+    val_acc = np.sum(np.array(classification) == val_label.cpu().numpy())
     final_val_acc = val_acc / len(val_label)
 
     return final_val_acc
@@ -198,8 +197,8 @@ def evaluation_auc(pred_model, prs_model, data, label, PRS, param_path, numerica
         result_pre = pred_model((numerical_x, categorical_x, icd_x)).T
         result_prs = prs_model(PRS)
         PRSPR_Pred = result_pre[:, 1] + result_prs
-    result_list = PRSPR_Pred.numpy()
-    label_list = label
+    result_list = PRSPR_Pred.cpu().numpy()
+    label_list = label.cpu().numpy()
 
     if save_result:
         np.save(result_folder + '/y_test', label)
@@ -211,7 +210,7 @@ def evaluation_auc(pred_model, prs_model, data, label, PRS, param_path, numerica
             f2.write(str(result_list[i]) + '\n')
         f1.close()
         f2.close()
-    auc = roc_auc_score(label, result_list)
+    auc = roc_auc_score(label_list, result_list)
 
     return auc
 
@@ -251,6 +250,7 @@ if __name__ == '__main__':
     is_age = True
     is_medical_history = True
     n_epoch = 300
+    batch_size = 100
     device = 'cuda'
 
     # training and evaluation PRS score & Label loading
@@ -319,9 +319,9 @@ if __name__ == '__main__':
         if not os.path.isdir(result):
             os.mkdir(result)
     if is_age:
-        result_folder = result + f'/{disease_name}_200epoch_monitor_acc-age'
+        result_folder = result + f'/{disease_name}_{n_epoch}epoch_monitor_acc-age'
     else:
-        result_folder = result + f'/{disease_name}_200epoch_monitor_acc-no_age'
+        result_folder = result + f'/{disease_name}_{n_epoch}epoch_monitor_acc-no_age'
     if is_medical_history:
         result_folder = result_folder + '-medical_history'
     if result_folder is not None:
@@ -355,7 +355,7 @@ if __name__ == '__main__':
                             val_data=evaluation_data, val_label=evaluation_label, val_PRS=evaluation_prs,
                             num_phenotype=num_phenotype, num_feature=num_feature,
                             param_save=param_path, train_loss_save=train_loss_path, val_loss_save=val_loss_path,
-                            alpha=alpha_candi[i], beta=beta_candi[j], n_epoch=n_epoch, device=device)
+                            alpha=alpha_candi[i], beta=beta_candi[j], n_epoch=n_epoch, batch_size=batch_size, device=device)
                 # test after training
                 eval_pred_model = myModel(num_phenotype, num_feature)
                 eval_prs_model = PRS_model()
