@@ -73,11 +73,7 @@ def Field_extraction(cols_id):
             cols = np.asarray(cols)
             for k, cols_idx in enumerate(all_cols_idx):
                 A = cols[cols_idx]
-                B = 'NAN'
-                for C in A:
-                    if C != '':
-                        B = C
-                field_content_dict[fields[k]].append(B)
+                field_content_dict[fields[k]].append(A)
 
     for i, key in enumerate(field_content_dict.keys()):
         if np.mod(i+1, 200) == 0:
