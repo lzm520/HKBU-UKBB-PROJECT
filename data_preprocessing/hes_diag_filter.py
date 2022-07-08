@@ -41,17 +41,31 @@ def HES_diagnosis(icd9_list, icd10_list):
         if level == '1':
             for icd10 in icd10_list:
                 if re.match(icd10, ICD10):
-                    if not hes_diag.get(index):
-                        disdate = hes_info[(hes_info['eid'] == int(float(eid))) & (hes_info['ins_index'] == int(float(ins_index)))]['disdate'].to_list()[0]
-                        if not pd.isna(disdate):
-                            disdate = float(str(disdate)[:4])
+                    disdate = hes_info[(hes_info['eid'] == int(float(eid))) & (hes_info['ins_index'] == int(float(ins_index)))]['disdate'].to_list()[0]
+                    if not pd.isna(disdate):
+                        disdate = float(str(disdate)[:4])
+                    if hes_diag.get(index):
+                        if np.isnan(hes_diag[index]['disdate']):
+                            hes_diag[index]['disdate'] = disdate
+                        elif hes_diag[index]['disdate'] > disdate:
+                            hes_diag[index]['disdate'] = disdate
+                    else:
                         hes_diag[index] = {'ukb_index': index, 'eid': eid, 'disdate': disdate}
-                        break
+                    break
             for icd9 in icd9_list:
                 if re.match(icd9, ICD9):
-                    if not hes_diag.get(index):
+                    disdate = hes_info[(hes_info['eid'] == int(float(eid))) & (hes_info['ins_index'] == int(float(ins_index)))][
+                        'disdate'].to_list()[0]
+                    if not pd.isna(disdate):
+                        disdate = float(str(disdate)[:4])
+                    if hes_diag.get(index):
+                        if np.isnan(hes_diag[index]['disdate']):
+                            hes_diag[index]['disdate'] = disdate
+                        elif hes_diag[index]['disdate'] > disdate:
+                            hes_diag[index]['disdate'] = disdate
+                    else:
                         hes_diag[index] = {'ukb_index': index, 'eid': eid, 'disdate': disdate}
-                        break
+                    break
     hesdiag_file.close()
     data = pd.DataFrame(hes_diag).transpose()
     data.index = range(0, len(data))

@@ -19,7 +19,7 @@ def extract_Eid_According_to_icd9_or_icd10_or_selfReport():
     field_20002_path = '/tmp/local/cszmli/data/field_extraction/field_20002.csv'
     field_birth_path = '/tmp/local/cszmli/data/field_extraction/fields/field_34.npy'
     field_age_at_recruitment_path = '/tmp/local/cszmli/data/field_extraction/fields/field_21022.npy'
-    save_path = '/tmp/local/cszmli/data/{disease_name}/eid_filter/eid_filter.csv'
+    save_path = f'/tmp/local/cszmli/data/{disease_name}/eid_filter/eid_filter.csv'
     training_eid_path = f'/tmp/local/cszmli/data/{disease_name}/eid_filter/eid_training.csv'
     evaluation_eid_path = f'/tmp/local/cszmli/data/{disease_name}/eid_filter/eid_evaluation.csv'
 
@@ -607,30 +607,39 @@ def extract_medical_history():
 
     print('Now processing one-hot matrix')
     for eid in eid_training:
-        t = 99999999
+        t = 999999999
         eid_icd9 = eid_diag[eid]['icd9']
         eid_icd10 = eid_diag[eid]['icd10']
         for (dis, idx, disdate) in eid_icd9:
             for icd9 in search_icd9_list:
                 if re.match(icd9, dis):
-                    if disdate < t:
-                        t = disdate
+                    if not np.isnan(disdate):
+                        if disdate < t:
+                            t = disdate
         for (dis, idx, disdate) in eid_icd10:
             for icd10 in search_icd10_list:
                 if re.match(icd10, dis):
-                    if disdate < t:
-                        t = disdate
+                    if not np.isnan(disdate):
+                        if disdate < t:
+                            t = disdate
         for (dis, idx, disdate) in eid_icd9:
             if disdate < t:
                 icd9_df.loc[icd9_df['eid'] == eid, dis[:3]] = 1
-                eid_icd9_diag_info_df = eid_icd9_diag_info_df.append({'eid': eid, 'icd9': dis, 'disdate': disdate},
-                                                                     ignore_index=True)
+                if dis[:3] in eid_icd9_diag_info_df[eid_icd9_diag_info_df['eid'] == eid]['icd9'].values:
+                    if (eid_icd9_diag_info_df.disdate[(eid_icd9_diag_info_df['eid'] == eid) & (eid_icd9_diag_info_df['icd9'] == dis[:3])] > disdate).values[0]:
+                        eid_icd9_diag_info_df.disdate[(eid_icd9_diag_info_df['eid'] == eid) & (eid_icd9_diag_info_df['icd9'] == dis[:3])] = disdate
+                else:
+                    eid_icd9_diag_info_df = eid_icd9_diag_info_df.append({'eid': eid, 'icd9': dis, 'disdate': disdate},
+                                                                         ignore_index=True)
         for (dis, idx, disdate) in eid_icd10:
             if disdate < t:
                 icd10_df.loc[icd10_df['eid'] == eid, dis[:3]] = 1
-                eid_icd10_diag_info_df = eid_icd10_diag_info_df.append({'eid': eid, 'icd10': dis, 'disdate': disdate},
+                if dis[:3] in eid_icd10_diag_info_df[eid_icd10_diag_info_df['eid'] == eid]['icd10'].values:
+                    if (eid_icd10_diag_info_df.disdate[(eid_icd10_diag_info_df['eid'] == eid) & (eid_icd10_diag_info_df['icd10'] == dis[:3])] > disdate).values[0]:
+                        eid_icd10_diag_info_df.disdate[(eid_icd10_diag_info_df['eid'] == eid) & (eid_icd10_diag_info_df['icd10'] == dis[:3])] = disdate
+                else:
+                    eid_icd10_diag_info_df = eid_icd10_diag_info_df.append({'eid': eid, 'icd10': dis, 'disdate': disdate},
                                                                        ignore_index=True)
-
     training_eid_icd9_df = icd9_df[icd9_df['eid'].isin(training_eids)]
     training_eid_icd9_df['eid'] = training_eid_icd9_df['eid'].astype('category')
     training_eid_icd9_df['eid'].cat.set_categories(training_eids, inplace=True)
